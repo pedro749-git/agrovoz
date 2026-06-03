@@ -1,0 +1,41 @@
+# -----------------------------
+# Secretos y Configuración (CRÍTICO)
+# -----------------------------
+.env
+.env.*
+*.pem
+secrets/
+
+# -----------------------------
+# Python-generated files
+# -----------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+build/
+dist/
+wheels/
+*.egg-info/
+.pytest_cache/
+
+# -----------------------------
+# Virtual environments
+# -----------------------------
+.venv/
+venv/
+env/
+ENV/
+
+# -----------------------------
+# Logs y Bases de datos locales
+# -----------------------------
+*.log
+*.sqlite3
+
+# -----------------------------
+# Editores de código y SO
+# -----------------------------
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
