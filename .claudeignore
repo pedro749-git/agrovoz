@@ -1,0 +1,12 @@
+# .claudeignore — secrets and noise Claude doesn't need to read
+
+# Secrets
+.env
+.env.*
+*.pem
+*.key
+.ssh/
+
+# Virtual env and lock file (large, no value for code context)
+.venv/
+uv.lock

@@ -1,5 +1,5 @@
 from supabase import create_async_client, AsyncClient
-from app.config import settings
+from app.config.settings import settings
 
 # Variable global oculta para guardar el cliente una vez creado
 _supabase_client: AsyncClient | None = None
@@ -9,8 +9,8 @@ async def get_supabase() -> AsyncClient:
     global _supabase_client
     if _supabase_client is None:
         _supabase_client = await create_async_client(
-            settings.supabase_url, 
-            settings.supabase_service_key
+            settings.supabase_url,
+            settings.supabase_service_key.get_secret_value()
         )
     return _supabase_client
 
