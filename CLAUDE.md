@@ -25,13 +25,12 @@ rule: **each milestone must work end-to-end before starting the next.**
       audio in → extracted JSON printed to console. Goal: validate that Qwen
       understands a Spanish field advisor. 2-3 days max.
 - [ ] M2 — Real repo starts HERE with the hexagonal skeleton (see Layout):
-      JSON persisted to Supabase (minimal tables: advisors, holdings, plots,
-      products, equipment, interventions)
+      JSON persisted to Supabase (all tables)
 - [ ] M3 — Prescription PDF (ReportLab) + upload to OSS
 - [ ] M4 — Minimal PWA: record button + today's list
 - [ ] M5 — Full state machine + execution confirmation + AEMET weather
 - [ ] M6 — Effectiveness assessment + delivery-note number
-- [ ] M7 — Campaign validations (table + signed PDF)
+- [ ] M7 — Campaign validations (signed PDF)
 
 **Update this checklist when a milestone is completed.** If the user asks for
 something from a future milestone, point it out and ask before implementing.
@@ -90,7 +89,8 @@ docs/            mvp_asesor_gip_v3.md · decisions.md
 ## Stack
 
 - Python 3.12 + FastAPI + Uvicorn. Pydantic V2 (optionals MUST have `= None`).
-- Supabase (PostgreSQL + magic-link Auth; verify JWT with SUPABASE_JWT_SECRET).
+- Supabase (PostgreSQL + magic-link Auth; verify JWT via asymmetric signing
+  keys / JWKS endpoint from M4 — not the legacy shared HS256 secret).
 - Qwen-Audio (speech→text) + Qwen Instruct (text→JSON) via DashScope.
 - Alibaba Cloud OSS (audio + PDFs), ReportLab (PDFs), AEMET OpenData (weather).
 - Deployment target: Alibaba Cloud ECS (hackathon requirement).

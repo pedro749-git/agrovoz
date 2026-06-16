@@ -1,17 +1,27 @@
+"""Telegram adapters.
+
+``TelegramNotifier`` implements the Notifier port (the core pushes results
+back to the advisor). ``download_voice`` is NOT a port: fetching the audio is
+the inbound adapter's job — the core only ever receives bytes.
+"""
+
 import httpx
+
 from app.config.settings import settings
+from app.core.ports.notifier import Notifier
 
 _BASE = "https://api.telegram.org/bot"
 
 
-async def send_message(chat_id: int, text: str) -> None:
-    token = settings.telegram_token.get_secret_value()
-    async with httpx.AsyncClient() as client:
-        await client.post(
-            f"{_BASE}{token}/sendMessage",
-            json={"chat_id": chat_id, "text": text},
-            timeout=10.0,
-        )
+class TelegramNotifier(Notifier):
+    async def send_message(self, recipient: str, text: str) -> None:
+        token = settings.telegram_token.get_secret_value()
+        async with httpx.AsyncClient() as client:
+            await client.post(
+                f"{_BASE}{token}/sendMessage",
+                json={"chat_id": recipient, "text": text},
+                timeout=10.0,
+            )
 
 
 async def download_voice(file_id: str) -> bytes:

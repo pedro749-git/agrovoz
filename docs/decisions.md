@@ -3,6 +3,62 @@
 One line per decision (taken AND discarded): what · why · date.
 This file becomes the thesis' design chapter.
 
+## 2026-06-16 — M2: fuzzy name resolution (ASR mis-hears proper nouns)
+
+- The ASR mis-transcribes proper nouns ("Abamectina"→"amavectina", "Finca de
+  Pepe"→"Finca de PP"), so exact `ilike` lookups failed · resolve dictated names
+  by fuzzy-matching against the catalog instead of exact match · 2026-06-16
+- Chose fuzzy-match-against-the-catalog over feeding domain vocabulary to the
+  ASR · the MAPA vademecum is thousands of products — too many for ASR context,
+  and a huge context degrades transcription; fuzzy matching scales and only ever
+  resolves to a REAL row (never invents a value, hard rule 4) · 2026-06-16
+- Rejected fuzzy-matching over free text · matching only against catalog rows +
+  a similarity threshold + an ambiguity guard (refuse when the top two are
+  equally close) keeps it legally safe; below threshold → None → the service
+  tells the advisor, it never guesses · 2026-06-16
+- Doses/quantities are NEVER fuzzy-matched, only identity (plot/product/
+  equipment) · dose is an exact legal value; `raw_transcription` keeps what was
+  actually heard for audit alongside the resolved row · 2026-06-16
+- M2 matches in Python (`difflib`, stdlib — no new dependency) over small row
+  sets; logged that product matching must move to a pg_trgm similarity query
+  (DB-side, GIN trigram index) once the real vademecum is loaded · 2026-06-16
+- Fuzzy helpers live in a pure module `adapters/outbound/_fuzzy.py` (no settings
+  import) · unit-testable without env/DB · 2026-06-16
+- Deferred confirm-before-persist + manual field correction to M5/M4 · the
+  confirmation flow needs conversational state (callback handlers, draft store)
+  and "execution confirmation" is M5 scope; the fuzzy threshold + the bot's
+  echo-back summary + correctable records (M5: correction = new intervention +
+  soft-delete) are enough safety for M2 · 2026-06-16
+
+## 2026-06-15 — M2: registration pipeline (FLUJO A) wired end-to-end
+
+- FastAPI is THE inbound; the Telegram webhook is one thin route over the core
+  pipeline, the future PWA (M4) will be a second route on the SAME pipeline ·
+  Telegram is a stand-in client until the PWA exists; hexagonal lets us swap the
+  transport without touching business logic · 2026-06-15
+- The pipeline does NOT depend on the Notifier port (it raises/returns) ·
+  how to answer is transport specific (Telegram message vs HTTP 422 JSON), so
+  notification stays in the inbound adapter; keeps the core fully pure · 2026-06-15
+- M2 Telegram stand-in compromises (revisit at M4): `advisor_id` from a single
+  `DEFAULT_ADVISOR_ID` setting, `transaction_id` minted server-side (PWA will
+  send crypto.randomUUID()), `device_timestamp` = Telegram message date ·
+  Telegram carries no auth/UUID/device clock; documented debt, not a design · 2026-06-15
+- `prompt_version` added to the Extractor port (read-only property) · the legal
+  trace (interventions.prompt_version) must hold for any extractor, so it is part
+  of the contract, not a Qwen detail · 2026-06-15
+- Generic `_serialize`/`_deserialize` helpers in the Supabase adapter (coerce by
+  dataclass type hints) instead of a hand-written mapper per entity · less code
+  for a student to read and one place to fix coercion bugs · 2026-06-15
+- Audio sent to Qwen as a base64 data URI instead of a temp file · avoids
+  touching the filesystem on the server; the M1 temp-file path was spike-only · 2026-06-15
+- supabase_repo uses the service_role key (bypasses RLS) · M2 backend is trusted
+  and the Telegram stand-in has no Supabase Auth JWT; the migration's RLS still
+  guards the PWA path · 2026-06-15
+- Dropped `SUPABASE_JWT_SECRET` from config · no JWT to verify until the PWA
+  authenticates (M4), and the legacy shared HS256 secret is deprecated by
+  Supabase; verify via the asymmetric signing keys / JWKS endpoint when M4 needs
+  it · 2026-06-16
+
 ## 2026-06-12 — M1 → M2: hexagonal skeleton
 
 - Created the M2 hexagonal skeleton (`core/{domain,ports,services}`,

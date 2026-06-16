@@ -1,14 +1,22 @@
+from uuid import UUID
+
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     # Telegram
     telegram_token: SecretStr
+    # M2 stand-in: Telegram has no auth, so every audio is attributed to this
+    # seeded advisor. Removed in M4 when the PWA authenticates per advisor.
+    default_advisor_id: UUID | None = None
 
     # Supabase
     supabase_url: str
     supabase_service_key: SecretStr
-    supabase_jwt_secret: SecretStr
+    # JWT verification deferred to M4: the Telegram stand-in has no Supabase
+    # Auth, so there is no token to verify yet. When the PWA authenticates,
+    # verify via the asymmetric JWT signing keys (JWKS endpoint), not the
+    # legacy shared HS256 secret.
 
     # DashScope (Qwen-Audio + Qwen Instruct)
     dashscope_api_key: SecretStr

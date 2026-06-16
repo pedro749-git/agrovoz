@@ -15,5 +15,12 @@ class Extractor(ABC):
     failure or on JSON that does not validate.
     """
 
+    @property
+    @abstractmethod
+    def prompt_version(self) -> str:
+        """Version tag of the prompt that produced the extraction. Persisted
+        in ``interventions.prompt_version`` for legal traceability (every
+        prompt change bumps it, per the methodology)."""
+
     @abstractmethod
     async def extract(self, transcription: str) -> ExtractedFields: ...

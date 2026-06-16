@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AgroVoz · Prototipo</title>
+<style>
+  :root{
+    /* Paleta: tierra de cultivo + fitosanitario. NO cream+serif genérico. */
+    --soil:#1f1a14;        /* texto sobre claro / fondo oscuro */
+    --bone:#f3efe6;        /* fondo papel agronómico */
+    --card:#ffffff;
+    --line:#d9d2c4;        /* hairlines */
+    --olive:#5a6b35;       /* verde olivo: marca, prescripción */
+    --olive-d:#3f4d24;
+    --terra:#b8442e;       /* terracota: error/fallido */
+    --amber:#c98a1b;       /* ámbar: pendiente */
+    --sky:#37607a;         /* azul observación/vigilancia */
+    --moss:#7c8a52;        /* verde claro válido */
+    --ink-soft:#6b6354;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    background:#cfc8b8;
+    font-family:'Segoe UI',system-ui,sans-serif;
+    color:var(--soil);
+    padding:24px;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1.page-title{
+    text-align:center;font-size:13px;letter-spacing:.18em;
+    text-transform:uppercase;color:var(--ink-soft);font-weight:600;margin-bottom:18px;
+  }
+  .grid{
+    display:flex;flex-wrap:wrap;gap:22px;justify-content:center;align-items:flex-start;
+    max-width:1700px;margin:0 auto;
+  }
+  /* Marco de móvil */
+  .phone{
+    width:300px;background:var(--bone);border-radius:30px;
+    border:1px solid #b3aa98;
+    box-shadow:0 12px 30px rgba(0,0,0,.22),0 2px 4px rgba(0,0,0,.1);
+    overflow:hidden;display:flex;flex-direction:column;height:600px;position:relative;
+  }
+  .phone .scr-label{
+    position:absolute;top:-19px;left:0;width:100%;text-align:center;
+    font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:#5b5345;font-weight:700;
+  }
+  /* Topbar */
+  .topbar{
+    display:flex;align-items:center;gap:10px;padding:13px 15px 11px;
+    background:var(--olive-d);color:#fff;flex-shrink:0;
+  }
+  .topbar .burger{display:flex;flex-direction:column;gap:3px;cursor:pointer}
+  .topbar .burger span{width:17px;height:2px;background:#fff;border-radius:2px}
+  .topbar .back{font-size:18px;cursor:pointer;line-height:1}
+  .topbar .ttl{font-size:13px;font-weight:600;letter-spacing:.03em}
+  .topbar .sub{font-size:10px;opacity:.7;margin-top:1px}
+  .topbar .grow{flex:1}
+  .topbar .ic{font-size:15px;opacity:.85}
+  /* Body scroll */
+  .body{flex:1;overflow-y:auto;padding:14px;}
+  .body::-webkit-scrollbar{width:0}
+  /* Bottom recorder bar */
+  .recbar{
+    display:flex;align-items:center;gap:10px;padding:11px 14px;
+    background:var(--card);border-top:1px solid var(--line);flex-shrink:0;
+  }
+  .recbar .field{
+    flex:1;border:1px solid var(--line);border-radius:20px;padding:8px 14px;
+    color:var(--ink-soft);font-size:12px;background:var(--bone);
+  }
+  .recbar .mic{
+    width:38px;height:38px;border-radius:50%;background:var(--olive);
+    display:flex;align-items:center;justify-content:center;color:#fff;font-size:15px;flex-shrink:0;
+  }
+
+  /* ---- Components ---- */
+  .label{font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-soft);font-weight:700;margin:14px 0 7px}
+  .label:first-child{margin-top:0}
+
+  .card{background:var(--card);border:1px solid var(--line);border-radius:13px;padding:13px;margin-bottom:10px}
+  .card.click{cursor:pointer;transition:transform .08s}
+  .card.click:active{transform:scale(.985)}
+
+  .row{display:flex;align-items:center;gap:10px}
+  .ic-chip{
+    width:30px;height:30px;border-radius:9px;display:flex;align-items:center;
+    justify-content:center;font-size:14px;flex-shrink:0;color:#fff;
+  }
+  .i-obs{background:var(--sky)}
+  .i-pre{background:var(--olive)}
+  .i-exe{background:var(--moss)}
+  .i-val{background:#5d4a8a}
+
+  .badge{font-size:9.5px;font-weight:700;padding:3px 8px;border-radius:20px;letter-spacing:.04em;white-space:nowrap}
+  .b-ok{background:#e7ecda;color:var(--olive-d)}
+  .b-err{background:#f6dcd4;color:var(--terra)}
+  .b-pend{background:#f7e9cc;color:#8a5e0e}
+  .b-obs{background:#dbe6ee;color:var(--sky)}
+
+  .listitem{display:flex;align-items:center;gap:11px;padding:11px 0;border-bottom:1px solid var(--line);cursor:pointer}
+  .listitem:last-child{border-bottom:none}
+  .li-time{font-size:11px;color:var(--ink-soft);font-variant-numeric:tabular-nums;width:38px;flex-shrink:0}
+  .li-main{flex:1;min-width:0}
+  .li-t1{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .li-t2{font-size:11px;color:var(--ink-soft);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+  /* HOME big button */
+  .home-wrap{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:20px}
+  .rec-btn{
+    width:150px;height:150px;border-radius:50%;background:var(--olive);
+    color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    box-shadow:0 8px 22px rgba(90,107,53,.45);cursor:pointer;border:5px solid #fff;
+  }
+  .rec-btn .mic-ic{font-size:38px;margin-bottom:4px}
+  .rec-btn .rec-t{font-size:13px;font-weight:700;letter-spacing:.05em}
+  .rec-hint{margin-top:18px;font-size:11px;color:var(--ink-soft);max-width:190px;line-height:1.5}
+
+  /* Detail blocks */
+  .dt-hero{text-align:center;padding:6px 0 14px}
+  .dt-hero .big-ic{width:54px;height:54px;border-radius:16px;margin:0 auto 9px;display:flex;align-items:center;justify-content:center;font-size:26px;color:#fff}
+  .dt-hero .plot{font-size:17px;font-weight:700}
+  .dt-hero .crop{font-size:11px;color:var(--ink-soft);margin-top:2px}
+  .dt-hero .when{font-size:11px;color:var(--ink-soft);margin-top:6px;font-variant-numeric:tabular-nums}
+
+  .kv{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line);font-size:12px}
+  .kv:last-child{border-bottom:none}
+  .kv .k{color:var(--ink-soft)}
+  .kv .v{font-weight:600;text-align:right;max-width:62%}
+
+  .quote{background:var(--bone);border-left:3px solid var(--sky);padding:10px 12px;border-radius:0 8px 8px 0;font-size:12.5px;line-height:1.5;font-style:italic;color:#3b352b}
+
+  .weather{display:flex;gap:6px;justify-content:space-between;margin-top:4px}
+  .wx{flex:1;background:var(--bone);border-radius:9px;padding:8px 4px;text-align:center}
+  .wx .wv{font-size:14px;font-weight:700}
+  .wx .wl{font-size:8.5px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.06em;margin-top:2px}
+
+  .audio-pill{display:flex;align-items:center;gap:8px;background:var(--bone);border:1px solid var(--line);border-radius:22px;padding:8px 12px;font-size:12px;margin-top:8px;cursor:pointer}
+  .audio-pill .play{width:22px;height:22px;border-radius:50%;background:var(--sky);color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px}
+
+  .btn{display:block;width:100%;text-align:center;padding:12px;border-radius:11px;font-size:13px;font-weight:700;border:none;cursor:pointer;margin-top:9px}
+  .btn-pri{background:var(--olive);color:#fff}
+  .btn-ghost{background:transparent;border:1.5px solid var(--olive);color:var(--olive-d)}
+  .btn-line{background:#fff;border:1px solid var(--line);color:var(--soil);font-weight:600}
+
+  .seg{display:flex;gap:6px;margin-top:8px}
+  .seg button{flex:1;padding:10px 0;border-radius:9px;border:1.5px solid var(--line);background:#fff;font-size:12px;font-weight:600;cursor:pointer}
+  .seg button.good{border-color:var(--moss);color:var(--olive-d)}
+  .seg button.fair{border-color:var(--amber);color:#8a5e0e}
+  .seg button.poor{border-color:var(--terra);color:var(--terra)}
+
+  .alert{border-radius:10px;padding:10px 12px;font-size:11.5px;line-height:1.5;display:flex;gap:8px;margin-top:9px}
+  .alert .ai{flex-shrink:0}
+  .a-warn{background:#f7e9cc;color:#7a560d}
+  .a-info{background:#e7ecda;color:var(--olive-d)}
+  .a-harvest{background:#dceadf;color:#2c5238}
+
+  .linkcard{display:flex;align-items:center;gap:10px;background:var(--bone);border:1px dashed var(--olive);border-radius:11px;padding:11px;cursor:pointer;margin-top:8px}
+  .linkcard .grow{flex:1}
+  .linkcard .lk-t1{font-size:12px;font-weight:700;color:var(--olive-d)}
+  .linkcard .lk-t2{font-size:10.5px;color:var(--ink-soft);margin-top:1px}
+  .linkcard .arr{color:var(--olive);font-size:16px}
+
+  /* Drawer menu */
+  .menu{padding:8px 0}
+  .menu .mi{display:flex;align-items:center;gap:12px;padding:15px 16px;font-size:14px;font-weight:600;border-bottom:1px solid var(--line);cursor:pointer}
+  .menu .mi .mic{font-size:16px;width:22px;text-align:center;color:var(--olive)}
+  .menu .mhead{padding:18px 16px;background:var(--olive-d);color:#fff}
+  .menu .mhead .nm{font-size:15px;font-weight:700}
+  .menu .mhead .rp{font-size:11px;opacity:.75;margin-top:2px}
+
+  /* Login */
+  .login{flex:1;display:flex;flex-direction:column;justify-content:center;padding:30px 24px}
+  .login .logo{text-align:center;margin-bottom:30px}
+  .login .logo .mk{font-size:30px;font-weight:800;letter-spacing:-.02em;color:var(--olive-d)}
+  .login .logo .mk span{color:var(--terra)}
+  .login .logo .tag{font-size:10.5px;color:var(--ink-soft);letter-spacing:.1em;text-transform:uppercase;margin-top:4px}
+  .login label{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-soft);display:block;margin-bottom:6px}
+  .login input{width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:11px;font-size:14px;background:#fff;margin-bottom:14px}
+  .login .note{font-size:11px;color:var(--ink-soft);text-align:center;margin-top:14px;line-height:1.5}
+
+  /* Map */
+  .mapwrap{position:relative;flex:1;background:#e8e2d2;overflow:hidden}
+  .mapwrap svg{width:100%;height:100%;display:block}
+  .map-search{position:absolute;top:10px;left:10px;right:10px;background:#fff;border-radius:22px;padding:9px 14px;font-size:12px;color:var(--ink-soft);box-shadow:0 2px 8px rgba(0,0,0,.15);display:flex;align-items:center;gap:8px}
+  .map-legend{position:absolute;bottom:10px;left:10px;background:rgba(255,255,255,.94);border-radius:10px;padding:9px 11px;font-size:10px;box-shadow:0 2px 8px rgba(0,0,0,.15)}
+  .map-legend .lg{display:flex;align-items:center;gap:6px;margin:3px 0}
+  .map-legend .dot{width:9px;height:9px;border-radius:50%}
+
+  .note-foot{font-size:10px;color:var(--ink-soft);text-align:center;margin-top:10px;line-height:1.5}
+
+  .col-title{width:100%;text-align:center;color:#4a4234;font-size:12px;letter-spacing:.15em;text-transform:uppercase;font-weight:700;margin:30px 0 -6px}
+</style>
+</head>
+<body>
+
+<div class="grid">
+
+  <!-- ╔═══ 1. LOGIN ═══╗ -->
+  <div class="phone">
+    <div class="scr-label">1 · Login</div>
+    <div class="login">
+      <div class="logo">
+        <div class="mk">Agro<span>Voz</span></div>
+        <div class="tag">Cuaderno de campo por voz</div>
+      </div>
+      <label>Correo electrónico</label>
+      <input type="email" placeholder="tu@email.com" value="">
+      <button class="btn btn-pri">Enviar enlace de acceso</button>
+      <div class="note">Te enviamos un enlace al correo.<br>Toca el enlace y entras — sin contraseñas.</div>
+    </div>
+  </div>
+
+  <!-- ╔═══ 2. HOME ═══╗ -->
+  <div class="phone">
+    <div class="scr-label">2 · Home</div>
+    <div class="topbar">
+      <div class="burger"><span></span><span></span><span></span></div>
+      <div><div class="ttl">Hola, Pedro</div><div class="sub">Martes 10 jun · 8 registros hoy</div></div>
+    </div>
+    <div class="home-wrap">
+      <div class="rec-btn">
+        <div class="mic-ic">🎙️</div>
+        <div class="rec-t">REGISTRAR</div>
+      </div>
+      <div class="rec-hint">Dicta una observación o una prescripción. El sistema reconoce cuál es.</div>
+    </div>
+    <div class="recbar">
+      <div class="field">Escribe si no puedes hablar…</div>
+      <div class="mic">▶</div>
+    </div>
+  </div>
+
+  <!-- ╔═══ 3. MENÚ LATERAL ═══╗ -->
+  <div class="phone">
+    <div class="scr-label">3 · Menú</div>
+    <div class="menu">
+      <div class="mhead">
+        <div class="nm">Pedro García</div>
+        <div class="rp">ROPO 30-00001 · Asesor</div>
+      </div>
+      <div class="mi"><span class="mic">⌂</span> Inicio</div>
+      <div class="mi"><span class="mic">≡</span> Historial</div>
+      <div class="mi"><span class="mic">▢</span> Parcelas</div>
+      <div class="mi"><span class="mic">✓</span> Validar campaña</div>
+      <div class="mi"><span class="mic">⚙</span> Ajustes</div>
+      <div class="mi"><span class="mic">⏻</span> Cerrar sesión</div>
+    </div>
+  </div>
+
+  <!-- ╔═══ 4. HISTORIAL ═══╗ -->
+  <div class="phone">
+    <div class="scr-label">4 · Historial</div>
+    <div class="topbar">
+      <div class="burger"><span></span><span></span><span></span></div>
+      <div class="ttl">Historial</div><div class="grow"></div>
+      <div class="ic">🔍</div>
+    </div>
+    <div class="body">
+      <!-- leyenda -->
+      <div class="card" style="padding:11px 13px">
+        <div style="display:flex;flex-wrap:wrap;gap:8px 14px;font-size:10.5px">
+          <span class="row" style="gap:5px"><span class="ic-chip i-obs" style="width:18px;height:18px;font-size:10px;border-radius:5px">👁</span>Observación</span>
+          <span class="row" style="gap:5px"><span class="ic-chip i-pre" style="width:18px;height:18px;font-size:10px;border-radius:5px">📄</span>Prescripción</span>
+          <span class="row" style="gap:5px"><span class="ic-chip i-exe" style="width:18px;height:18px;font-size:10px;border-radius:5px">✓</span>Ejecución</span>
+          <span class="row" style="gap:5px"><span class="ic-chip i-val" style="width:18px;height:18px;font-size:10px;border-radius:5px">★</span>Validación</span>
+        </div>
+      </div>
+
+      <div class="card" style="padding:4px 13px">
+        <div class="listitem">
+          <span class="ic-chip i-exe">✓</span>
+          <div class="li-main"><div class="li-t1">Parcela Pepe</div><div class="li-t2">Ejecución · Abamectina 1,5 L/ha</div></div>
+          <div style="text-align:right"><div class="li-time">14:03</div><span class="badge b-ok" style="margin-top:3px;display:inline-block">Válido</span></div>
+        </div>
+        <div class="listitem">
+          <span class="ic-chip i-pre">📄</span>
+          <div class="li-main"><div class="li-t1">Finca Norte</div><div class="li-t2">Prescripción · dosis ilegal</div></div>
+          <div style="text-align:right"><div class="li-time">11:30</div><span class="badge b-err" style="margin-top:3px;display:inline-block">Fallido</span></div>
+        </div>
+        <div class="listitem">
+          <span class="ic-chip i-obs">👁</span>
+          <div class="li-main"><div class="li-t1">Finca Antonio</div><div class="li-t2">Observación · No tratar</div></div>
+          <div style="text-align:right"><div class="li-time">09:47</div><span class="badge b-obs" style="margin-top:3px;display:inline-block">Vigilancia</span></div>
+        </div>
+        <div class="listitem">
+          <span class="ic-chip i-pre">📄</span>
+          <div class="li-main"><div class="li-t1">Los Almendros</div><div class="li-t2">Prescripción · Clorpirifos</div></div>
+          <div style="text-align:right"><div class="li-time">09:12</div><span class="badge b-pend" style="margin-top:3px;display:inline-block">Sin clima</span></div>
+        </div>
+      </div>
+      <div class="note-foot">Toca cualquier registro para ver el detalle</div>
+    </div>
+  </div>
+
+  <div class="col-title">Pantallas de detalle (las que estaban vacías)</div>
+
+  <!-- ╔═══ 5. DETALLE OBSERVACIÓN ═══╗ -->
+  <div class="phone">
+    <div class="scr-label">5 · Detalle Observación</div>
+    <div class="topbar"><div class="back">‹</div><div class="ttl">Observación</div></div>
+    <div class="body">
+      <div class="dt-hero">
+        <div class="big-ic i-obs">👁</div>
+        <div class="plot">Finca Antonio</div>
+        <div class="crop">Limonero · Fino · 3,5 ha</div>
+        <div class="when">Mar 10 jun 2025 · 09:47</div>
+        <span class="badge b-obs" style="display:inline-block;margin-top:8px">Vigilancia · No tratar</span>
+      </div>
+
+      <div class="label">Lo que observé</div>
+      <div class="card">
+        <div class="kv"><span class="k">Plaga vigilada</span><span class="v">Araña roja</span></div>
+        <div class="quote" style="margin-top:10px">"Tres capturas en trampa, muy por debajo del umbral. Fauna útil presente. No procede tratar."</div>
+        <div class="audio-pill"><span class="play">▶</span> Escuchar audio original · 0:18</div>
+      </div>
+
+      <div class="label">Condiciones · AEMET 09:00</div>
+      <div class="card">
+        <div class="weather">
+          <div class="wx"><div class="wv">19°</div><div class="wl">Temp</div></div>
+          <div class="wx"><div class="wv">58%</div><div class="wl">Humedad</div></div>
+          <div class="wx"><div class="wv">4</div><div class="wl">km/h NE</div></div>
+        </div>
+      </div>
+
+      <div class="alert a-info"><span class="ai">✓</span><span>Vigilancia documentada (GIP). Quedará como antecedente si esta parcela requiere tratamiento más adelante.</span></div>
+    </div>
+  </div>
+
+  <!-- ╔═══ 6. DETALLE PRESCRIPCIÓN ═══╗ -->
+  <div class="phone">
+    <div class="scr-label">6 · Detalle Prescripción</div>
+    <div class="topbar"><div class="back">‹</div><div class="ttl">Prescripción</div></div>
+    <div class="body">
+      <div class="dt-hero">
+        <div class="big-ic i-pre">📄</div>
+        <div class="plot">Parcela Pepe</div>
+        <div class="crop">Limonero · Fino · 3,5 ha</div>
+        <div class="when">Mar 24 jun 2025 · 10:47</div>
+        <span class="badge b-ok" style="display:inline-block;margin-top:8px">Firmada · ROPO 30-00001</span>
+      </div>
+
+      <div class="label">Tratamiento prescrito</div>
+      <div class="card">
+        <div class="kv"><span class="k">Producto</span><span class="v">Abamectina</span></div>
+        <div class="kv"><span class="k">Nº registro MAPA</span><span class="v">ES-00001</span></div>
+        <div class="kv"><span class="k">Dosis</span><span class="v">1,5 L/ha</span></div>
+        <div class="kv"><span class="k">Plaga objetivo</span><span class="v">Araña roja</span></div>
+        <div class="kv"><span class="k">Sup. a tratar</span><span class="v">3,5 ha</span></div>
+        <div class="kv"><span class="k">Fecha prevista</span><span class="v">25 jun 2025</span></div>
+      </div>
+
+      <div class="label">Justificación GIP</div>
+      <div class="card">
+        <div class="kv"><span class="k">Motivo</span><span class="v">Superación de umbral</span></div>
+        <div style="font-size:11.5px;color:var(--ink-soft);margin-top:8px;line-height:1.5">
+          <strong style="color:var(--soil)">Alternativas previas:</strong> Vigilancia 3 jun (2 capturas), 10 jun (5), 17 jun (12, cerca de umbral). Trampas cromáticas sin control suficiente.
+        </div>
+      </div>
+
+      <button class="btn btn-pri">📄 Ver PDF de prescripción</button>
+      <button class="btn btn-line">Enviar al agricultor</button>
+
+      <div class="label">Ejecución</div>
+      <div class="alert a-warn"><span class="ai">⏳</span><span>Pendiente de ejecución. Cuando se aplique, confirma fecha y dosis reales.</span></div>
+      <button class="btn btn-ghost">Confirmar ejecución</button>
+    </div>
+  </div>
+
+  <!-- ╔═══ 7. DETALLE EJECUCIÓN ═══╗ -->
+  <div class="phone">
+    <div class="scr-label">7 · Detalle Ejecución</div>
+    <div class="topbar"><div class="back">‹</div><div class="ttl">Ejecución</div></div>
+    <div class="body">
+      <div class="dt-hero">
+        <div class="big-ic i-exe">✓</div>
+        <div class="plot">Parcela Pepe</div>
+        <div class="crop">Limonero · Fino · 3,5 ha</div>
+        <div class="when">Aplicado: Jue 26 jun 2025 · 08:15</div>
+        <span class="badge b-ok" style="display:inline-block;margin-top:8px">Válido · listo para CUE</span>
+      </div>
+
+      <div class="label">Aplicación real</div>
+      <div class="card">
+        <div class="kv"><span class="k">Producto</span><span class="v">Abamectina · ES-00001</span></div>
+        <div class="kv"><span class="k">Dosis aplicada</span><span class="v">1,5 L/ha</span></div>
+        <div class="kv"><span class="k">Caldo</span><span class="v">300 L/ha</span></div>
+        <div class="kv"><span class="k">Sup. tratada</span><span class="v">3,5 ha</span></div>
+        <div class="kv"><span class="k">Maquinaria</span><span class="v">Atomizador · ROMA 30-001</span></div>
+        <div class="kv"><span class="k">Aplicador</span><span class="v">Pedro García · ROPO</span></div>
+      </div>
+
+      <div class="alert a-harvest"><span class="ai">🌾</span><span><strong>Cosecha permitida desde el 10 jul 2025</strong> · plazo de seguridad 14 días (PHI)</span></div>
+
+      <div class="label">Condiciones · AEMET 26 jun 08:00</div>
+      <div class="card">
+        <div class="weather">
+          <div class="wx"><div class="wv">21°</div><div class="wl">Temp</div></div>
+          <div class="wx"><div class="wv">62%</div><div class="wl">Humedad</div></div>
+          <div class="wx"><div class="wv">6</div><div class="wl">km/h S</div></div>
+        </div>
+        <div style="font-size:10px;color:var(--ink-soft);margin-top:8px;text-align:center">Clima de la fecha REAL de aplicación, no de la prescripción</div>
+      </div>
+
+      <div class="label">Valoración del resultado</div>
+      <div class="card">
+        <div style="font-size:11.5px;color:var(--ink-soft);margin-bottom:4px">En tu próxima visita, ¿cómo funcionó?</div>
+        <div class="seg">
+          <button class="good">Buena</button>
+          <button class="fair">Regular</button>
+          <button class="poor">Mala</button>
+        </div>
+        <div style="margin-top:10px">
+          <label style="font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-soft);font-weight:700">Nº albarán / factura</label>
+          <input style="width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:9px;font-size:13px;margin-top:5px" placeholder="FAC-2025-…">
+        </div>
+        <button class="btn btn-pri">Guardar valoración</button>
+      </div>
+
+      <button class="btn btn-line">📄 Ver justificante de aplicación</button>
+    </div>
+  </div>
+
+  <div class="col-title">Parcelas y mapa</div>
+
+  <!-- ╔═══ 8. PARCELAS ═══╗ -->
+  <div class="phone">
+    <div class="scr-label">8 · Parcelas</div>
+    <div class="topbar">
+      <div class="burger"><span></span><span></span><span></span></div>
+      <div class="ttl">Parcelas</div><div class="grow"></div><div class="ic">🔍</div>
+    </div>
+    <div class="body">
+      <button class="btn btn-ghost" style="margin-top:0">🗺️ Ver en el mapa</button>
+      <div style="height:6px"></div>
+      <div class="card click row">
+        <span class="ic-chip" style="background:var(--sky)">📍</span>
+        <div class="li-main"><div class="li-t1">Finca Antonio</div><div class="li-t2">Limonero · Verna · 8,2 ha</div></div>
+        <span style="color:var(--ink-soft)">›</span>
+      </div>
+      <div class="card click row">
+        <span class="ic-chip" style="background:var(--olive)">📍</span>
+        <div class="li-main"><div class="li-t1">Parcela Pepe</div><div class="li-t2">Limonero · Fino · 3,5 ha</div></div>
+        <span style="color:var(--ink-soft)">›</span>
+      </div>
+      <div class="card click row">
+        <span class="ic-chip" style="background:var(--moss)">📍</span>
+        <div class="li-main"><div class="li-t1">Los Almendros</div><div class="li-t2">Almendro · Marcona · 5,0 ha</div></div>
+        <span style="color:var(--ink-soft)">›</span>
+      </div>
+      <div class="note-foot">Las parcelas las da de alta el administrador.<br>Tú solo usas su nombre al dictar.</div>
+    </div>
+  </div>
+
+  <!-- ╔═══ 9. MAPA ═══╗ -->
+  <div class="phone">
+    <div class="scr-label">9 · Mapa</div>
+    <div class="topbar"><div class="back">‹</div><div class="ttl">Mapa</div></div>
+    <div class="mapwrap">
+      <svg viewBox="0 0 300 480" preserveAspectRatio="xMidYMid slice">
+        <rect width="300" height="480" fill="#e3ddcb"/>
+        <!-- caminos -->
+        <path d="M-10,150 Q140,120 320,170" stroke="#cfc6b0" stroke-width="9" fill="none"/>
+        <path d="M150,-10 Q120,200 200,300 T180,500" stroke="#cfc6b0" stroke-width="7" fill="none"/>
+        <path d="M-10,330 Q120,300 320,360" stroke="#cfc6b0" stroke-width="6" fill="none"/>
+        <!-- recinto Antonio -->
+        <polygon points="95,180 175,165 195,250 110,270" fill="#5a6b3533" stroke="var(--sky)" stroke-width="2.5"/>
+        <circle cx="140" cy="215" r="6" fill="var(--sky)"/>
+        <text x="140" y="205" text-anchor="middle" font-size="11" font-weight="700" fill="#274a5e">Finca Antonio</text>
+        <!-- recinto Pepe -->
+        <polygon points="55,360 120,355 130,420 60,425" fill="#5a6b3533" stroke="var(--olive)" stroke-width="2.5"/>
+        <circle cx="90" cy="390" r="6" fill="var(--olive)"/>
+        <text x="92" y="380" text-anchor="middle" font-size="10" font-weight="700" fill="#3f4d24">Parcela Pepe</text>
+        <!-- tu ubicación -->
+        <circle cx="210" cy="320" r="7" fill="var(--terra)"/>
+        <circle cx="210" cy="320" r="13" fill="var(--terra)" opacity=".25"/>
+      </svg>
+      <div class="map-search"><span>🔍</span> Buscar parcela…</div>
+      <div class="map-legend">
+        <div class="lg"><span class="dot" style="background:var(--terra)"></span> Tu ubicación</div>
+        <div class="lg"><span class="dot" style="background:var(--sky)"></span> Recinto SIGPAC</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ╔═══ 10. DETALLES PARCELA ═══╗ -->
+  <div class="phone">
+    <div class="scr-label">10 · Detalle Parcela</div>
+    <div class="topbar"><div class="back">‹</div><div><div class="ttl">Parcela Pepe</div><div class="sub">Limonero · Fino · 3,5 ha</div></div></div>
+    <div class="body">
+      <div class="card" style="padding:11px 13px">
+        <div class="kv"><span class="k">SIGPAC</span><span class="v" style="font-size:11px">30:015:012:00045:002</span></div>
+        <div class="kv"><span class="k">Titular</span><span class="v">José Ruiz · 30 ha REA</span></div>
+      </div>
+
+      <div class="label">Campañas</div>
+      <div class="card click row">
+        <div class="li-main"><div class="li-t1">Cítricos 2025</div><div class="li-t2">9 intervenciones · validación al día</div></div>
+        <span class="badge b-ok">Conforme</span>
+      </div>
+      <div class="card click row">
+        <div class="li-main"><div class="li-t1">Cítricos 2024</div><div class="li-t2">14 intervenciones · cerrada</div></div>
+        <span style="color:var(--ink-soft)">›</span>
+      </div>
+
+      <div class="label">Intervenciones recientes</div>
+      <div class="card" style="padding:4px 13px">
+        <div class="listitem"><span class="ic-chip i-exe" style="width:24px;height:24px;font-size:11px">✓</span><div class="li-main"><div class="li-t1" style="font-size:12px">26 jun · Abamectina</div></div><span class="badge b-ok">Válido</span></div>
+        <div class="listitem"><span class="ic-chip i-obs" style="width:24px;height:24px;font-size:11px">👁</span><div class="li-main"><div class="li-t1" style="font-size:12px">17 jun · Vigilancia</div></div><span class="badge b-obs">Obs.</span></div>
+        <div class="listitem"><span class="ic-chip i-obs" style="width:24px;height:24px;font-size:11px">👁</span><div class="li-main"><div class="li-t1" style="font-size:12px">10 jun · Vigilancia</div></div><span class="badge b-obs">Obs.</span></div>
+      </div>
+    </div>
+    <div class="recbar">
+      <div class="mic" style="background:var(--olive)">🎙️</div>
+      <div class="field">Registrar aquí…</div>
+      <div class="mic">▶</div>
+    </div>
+  </div>
+
+  <!-- ╔═══ 11. DETALLE CAMPAÑA / VALIDACIÓN ═══╗ -->
+  <div class="phone">
+    <div class="scr-label">11 · Detalle Campaña</div>
+    <div class="topbar"><div class="back">‹</div><div><div class="ttl">Cítricos 2025</div><div class="sub">Parcela Pepe · 1 ene – 31 dic</div></div></div>
+    <div class="body">
+      <div class="card">
+        <div class="kv"><span class="k">Intervenciones</span><span class="v">9</span></div>
+        <div class="kv"><span class="k">Prescripciones</span><span class="v">4</span></div>
+        <div class="kv"><span class="k">Observaciones</span><span class="v">5</span></div>
+      </div>
+
+      <div class="label">Validaciones del asesor</div>
+      <div class="card row">
+        <span class="ic-chip i-val" style="width:26px;height:26px;font-size:12px">★</span>
+        <div class="li-main"><div class="li-t1" style="font-size:12px">Intermedia</div><div class="li-t2">12 jul 2025 · conforme</div></div>
+        <span class="badge b-ok">Firmada</span>
+      </div>
+      <div class="card row" style="opacity:.7">
+        <span class="ic-chip" style="width:26px;height:26px;font-size:12px;background:var(--line);color:var(--ink-soft)">★</span>
+        <div class="li-main"><div class="li-t1" style="font-size:12px">Final de ciclo</div><div class="li-t2">Pendiente · al cerrar campaña</div></div>
+        <span class="badge b-pend">Pendiente</span>
+      </div>
+
+      <div class="alert a-warn" style="margin-top:14px"><span class="ai">⚠️</span><span>La validación final es obligatoria al cerrar la campaña (mín. 2 por ciclo).</span></div>
+
+      <button class="btn btn-pri">★ Validar y firmar campaña</button>
+      <div class="note-foot">Genera un PDF con el listado de actuaciones + tu declaración de conformidad y firma.</div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
