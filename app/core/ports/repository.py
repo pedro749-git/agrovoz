@@ -16,13 +16,25 @@ Contract notes:
 from abc import ABC, abstractmethod
 from uuid import UUID
 
-from app.core.domain.models import Advisor, Equipment, Intervention, Plot, Product
+from app.core.domain.models import (
+    Advisor,
+    Equipment,
+    Holding,
+    Intervention,
+    Plot,
+    Product,
+)
 
 
 class Repository(ABC):
     @abstractmethod
     async def get_advisor(self, advisor_id: UUID) -> Advisor | None:
         """For the account_status == ACTIVE check (FLUJO A step 2)."""
+
+    @abstractmethod
+    async def get_holding(self, holding_id: UUID) -> Holding | None:
+        """The record belongs to the HOLDING (rule 6); needed to render the
+        prescription PDF (owner, NIF, REA/REGEPA)."""
 
     @abstractmethod
     async def get_intervention_by_transaction_id(

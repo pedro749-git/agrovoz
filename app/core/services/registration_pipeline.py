@@ -10,6 +10,8 @@ domain errors and RETURNS the persisted intervention; the inbound adapter
 decides how to surface that.
 """
 
+import asyncio
+import logging
 from datetime import datetime, timedelta
 from uuid import UUID
 
@@ -20,13 +22,17 @@ from app.core.domain.errors import (
     PlotNotFoundError,
     ProductError,
 )
-from app.core.domain.models import Equipment, Intervention, Plot, Product
+from app.core.domain.models import Advisor, Equipment, Intervention, Plot, Product
 from app.core.domain.schemas import ExtractedFields
 from app.core.domain.states import LifecycleState, validate_transition
 from app.core.ports.extractor import Extractor
+from app.core.ports.pdf_generator import PdfGenerator
 from app.core.ports.repository import Repository
+from app.core.ports.storage import Storage
 from app.core.ports.transcriber import Transcriber
 from app.core.services.validation_service import validate_registration
+
+logger = logging.getLogger(__name__)
 
 # The LLM classifies the audio; we map its type to the lifecycle state.
 # A direct EXECUTION collapses PRESCRIBED+EXECUTED into one stored EXECUTED row.
@@ -43,10 +49,14 @@ class RegistrationPipeline:
         transcriber: Transcriber,
         extractor: Extractor,
         repository: Repository,
+        pdf_generator: PdfGenerator,
+        storage: Storage,
     ) -> None:
         self._transcriber = transcriber
         self._extractor = extractor
         self._repo = repository
+        self._pdf = pdf_generator
+        self._storage = storage
 
     async def register(
         self,
@@ -108,7 +118,70 @@ class RegistrationPipeline:
             transcription=transcription,
         )
         validate_transition(None, intervention.lifecycle_state)
+
+        # 8. PRESCRIPTION only (spec FLUJO A): render the legal PDF and store it
+        #    in OSS, keyed by transaction_id — known before the INSERT, so it is
+        #    a single DB write and a retry overwrites the same object. The key is
+        #    set on the entity, then persisted in one go.
+        if intervention.lifecycle_state is LifecycleState.PRESCRIBED:
+            intervention.prescription_pdf_key = await self._store_prescription_pdf(
+                intervention=intervention,
+                advisor=advisor,
+                plot=plot,
+                product=product,  # never None for PRESCRIPTION (step 5)
+                equipment=equipment,
+                transaction_id=transaction_id,
+            )
+
         return await self._repo.save_intervention(intervention)
+
+    async def _store_prescription_pdf(
+        self,
+        *,
+        intervention: Intervention,
+        advisor: Advisor,
+        plot: Plot,
+        product: Product,
+        equipment: Equipment | None,
+        transaction_id: UUID,
+    ) -> str | None:
+        """Build the prescription PDF and upload it to OSS; return its key.
+
+        Best-effort: NEITHER a storage failure NOR a PDF-rendering bug may
+        block the legal record (same principle as hard rule 8 for AEMET). The
+        PDF is deterministic, so it can be regenerated from the persisted row
+        later — on ANY failure we log the traceback, return None and the
+        intervention is saved without a PDF key.
+        """
+        try:
+            holding = await self._repo.get_holding(plot.holding_id)
+            if holding is None:
+                logger.warning(
+                    "Holding %s not found; saving prescription without PDF",
+                    plot.holding_id,
+                )
+                return None
+            # PDF building is pure CPU (no I/O) -> run off the event loop.
+            pdf = await asyncio.to_thread(
+                self._pdf.generate_prescription,
+                intervention=intervention,
+                advisor=advisor,
+                holding=holding,
+                plot=plot,
+                product=product,
+                equipment=equipment,
+            )
+            key = f"prescriptions/{transaction_id}.pdf"
+            await self._storage.upload(
+                data=pdf, key=key, content_type="application/pdf"
+            )
+            return key
+        except Exception:
+            # PDF render OR OSS upload failed: save the record anyway. The
+            # traceback tells you which (StorageError = OSS, otherwise a render
+            # bug); the PDF can be regenerated from the row later.
+            logger.exception("Prescription PDF render/upload failed; saving without PDF")
+            return None
 
     @staticmethod
     def _require_treatment_fields(fields: ExtractedFields) -> None:

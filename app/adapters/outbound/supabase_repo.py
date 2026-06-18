@@ -18,7 +18,14 @@ from supabase import AsyncClient, create_async_client
 
 from app.adapters.outbound._fuzzy import best_match
 from app.config.settings import settings
-from app.core.domain.models import Advisor, Equipment, Intervention, Plot, Product
+from app.core.domain.models import (
+    Advisor,
+    Equipment,
+    Holding,
+    Intervention,
+    Plot,
+    Product,
+)
 from app.core.ports.repository import Repository
 
 _client: AsyncClient | None = None
@@ -77,12 +84,30 @@ def _to_json(value):
     return value
 
 
+# Columns the DB fills in itself — never sent on insert.
+_DB_GENERATED = ("id", "created_at", "updated_at")
+
+
 def _serialize(obj) -> dict:
-    """Domain dataclass -> insert payload (DB generates id/created_at/updated_at)."""
+    """Domain dataclass -> insert payload, with ONLY real table columns.
+
+    We do not blindly dump every field: that breaks the day a model gains a
+    field that is not a column (the INSERT fails with an opaque PostgREST
+    error, hard to trace). Instead we skip the DB-generated columns and any
+    field explicitly tagged ``field(metadata={"persist": False})`` — the
+    documented escape hatch for computed/in-memory-only fields.
+    ``tests/test_serialize_columns.py`` asserts this payload matches the
+    migration's columns exactly, so model<->schema drift fails loudly there.
+    """
+    persisted = {
+        f.name
+        for f in dataclasses.fields(obj)
+        if f.name not in _DB_GENERATED and f.metadata.get("persist", True)
+    }
     return {
         k: _to_json(v)
         for k, v in dataclasses.asdict(obj).items()
-        if k not in ("id", "created_at", "updated_at")
+        if k in persisted
     }
 
 
@@ -98,6 +123,18 @@ class SupabaseRepository(Repository):
             .execute()
         )
         return _deserialize(Advisor, res.data[0]) if res.data else None
+
+    async def get_holding(self, holding_id: UUID) -> Holding | None:
+        client = await get_client()
+        res = await (
+            client.table("holdings")
+            .select("*")
+            .eq("id", str(holding_id))
+            .is_("deleted_at", "null")
+            .limit(1)
+            .execute()
+        )
+        return _deserialize(Holding, res.data[0]) if res.data else None
 
     async def get_intervention_by_transaction_id(
         self, transaction_id: UUID

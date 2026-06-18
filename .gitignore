@@ -35,6 +35,11 @@ ENV/
 *.sqlite3
 
 # -----------------------------
+# Artefactos generados (PDFs de muestra para revisar a ojo)
+# -----------------------------
+sample_prescription.pdf
+
+# -----------------------------
 # Editores de código y SO
 # -----------------------------
 .vscode/

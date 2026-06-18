@@ -21,12 +21,14 @@ needed, never implement it wholesale.**
 Solo project (3rd-year CS student) built in incremental milestones. Golden
 rule: **each milestone must work end-to-end before starting the next.**
 
-- [x] M1 — SPIKE (throwaway, `spike/main.py`, single file, NO architecture):
-      audio in → extracted JSON printed to console. Goal: validate that Qwen
-      understands a Spanish field advisor. 2-3 days max.
-- [ ] M2 — Real repo starts HERE with the hexagonal skeleton (see Layout):
+- [x] M1 — SPIKE (throwaway, single file, NO architecture): audio in →
+      extracted JSON printed to console. Goal: validate that Qwen understands a
+      Spanish field advisor. 2-3 days max. Archived at
+      `docs/historico/spike_main.py` (no longer runnable against current code).
+- [x] M2 — Real repo starts HERE with the hexagonal skeleton (see Layout):
       JSON persisted to Supabase (all tables)
-- [ ] M3 — Prescription PDF (ReportLab) + upload to OSS
+- [x] M3 — Prescription PDF (ReportLab) + upload to OSS (verified end-to-end:
+      real upload + presigned URL downloaded from a phone)
 - [ ] M4 — Minimal PWA: record button + today's list
 - [ ] M5 — Full state machine + execution confirmation + AEMET weather
 - [ ] M6 — Effectiveness assessment + delivery-note number
@@ -47,7 +49,7 @@ Do NOT do (decided and justified in the spec — do not insist):
 ## Repository layout (from M2 onward)
 
 All code lives under a single top-level `app/` package (keeps generic names like
-`config`/`core` out of the global import namespace). `spike/`, `prompts/`, `pwa/`
+`config`/`core` out of the global import namespace). `prompts/`, `pwa/`
 and `docs/` stay at the repo root.
 
 ```
@@ -65,8 +67,7 @@ app/
   config/        settings.py (pydantic-settings) · container.py · .env(.example)
 pwa/             (M4+) React + Vite + Tailwind + vite-plugin-pwa
 prompts/         extraction_v1.md  (few-shot examples; version bump on change)
-spike/           main.py  (M1 throwaway — never imported by the package)
-docs/            mvp_asesor_gip_v3.md · decisions.md
+docs/            mvp_asesor_gip_v3.md · decisions.md · historico/ (M1 spike)
 ```
 
 ## Language convention
@@ -96,7 +97,7 @@ docs/            mvp_asesor_gip_v3.md · decisions.md
 - Deployment target: Alibaba Cloud ECS (hackathon requirement).
 
 ```bash
-uvicorn spike.main:app --reload              # M1 spike / dev (run from repo root)
+uvicorn app.adapters.inbound.api:app --reload  # M2+ dev server (run from repo root)
 uv sync                                       # install deps from pyproject/uv.lock
 cp app/config/.env.example app/config/.env    # fill keys manually, never commit .env
 ```

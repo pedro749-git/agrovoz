@@ -5,7 +5,9 @@ that works). Swapping an adapter (e.g. a different LLM) is a one-line change her
 and nowhere else.
 """
 
+from app.adapters.outbound.oss_storage import OssStorage
 from app.adapters.outbound.qwen import QwenExtractor, QwenTranscriber
+from app.adapters.outbound.reportlab_pdf import ReportLabPdfGenerator
 from app.adapters.outbound.supabase_repo import SupabaseRepository
 from app.adapters.outbound.telegram import TelegramNotifier
 from app.core.services.registration_pipeline import RegistrationPipeline
@@ -14,5 +16,9 @@ transcriber = QwenTranscriber()
 extractor = QwenExtractor()
 repository = SupabaseRepository()
 notifier = TelegramNotifier()
+pdf_generator = ReportLabPdfGenerator()
+storage = OssStorage()
 
-pipeline = RegistrationPipeline(transcriber, extractor, repository)
+pipeline = RegistrationPipeline(
+    transcriber, extractor, repository, pdf_generator, storage
+)

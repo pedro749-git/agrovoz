@@ -40,5 +40,10 @@ def main():
     print("ALL FUZZY TESTS PASSED")
 
 
+def test_fuzzy_lookup():
+    """pytest entry point."""
+    main()
+
+
 if __name__ == "__main__":
     main()

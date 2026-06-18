@@ -1,3 +1,13 @@
+"""HISTÓRICO — M1 spike (desechable). NO ejecutable contra el código actual.
+
+Validó que Qwen entiende a un asesor de campo: audio → transcripción → JSON.
+Se conserva como artefacto para el capítulo de diseño del TFG. Sus imports
+(`transcribe_audio`, `extract_fields`, `send_message`) son las APIs basadas en
+funciones de M1, hoy reemplazadas por las clases `QwenTranscriber`/
+`QwenExtractor`/`TelegramNotifier`. El flujo real vive en
+`app/adapters/inbound/api.py` + `app/core/services/registration_pipeline.py`.
+"""
+
 import json
 
 from fastapi import FastAPI, Request, BackgroundTasks

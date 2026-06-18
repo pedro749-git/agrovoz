@@ -3,6 +3,103 @@
 One line per decision (taken AND discarded): what · why · date.
 This file becomes the thesis' design chapter.
 
+## 2026-06-18 — Review feedback: robust save + error catch-all
+
+- `_serialize` filters to real columns explicitly (skips DB-generated +
+  fields tagged `metadata={"persist": False}`) instead of dumping the whole
+  dataclass · a model field that is not a column would otherwise blow up the
+  INSERT with an opaque PostgREST error, hard to trace · 2026-06-18
+- New `tests/test_serialize_columns.py` parses the migration and asserts the
+  insert payload == real columns (minus generated) · detects model<->schema
+  drift in both directions at test time, no DB/credentials needed · 2026-06-18
+- Catch-all `except Exception` + `logger.exception` added to `_handle_update`
+  (Telegram background task) · an unhandled error in a BackgroundTask dies
+  silently and leaves the advisor stuck on "procesando…"; the log trace is
+  how you see *why* it failed · 2026-06-18
+- DISCARDED a global FastAPI `@app.exception_handler` for now · it only fires
+  in the request→response cycle, but the Telegram work runs in a
+  BackgroundTask after the ACK; the right home for it is the synchronous PWA
+  HTTP path (M4), not built ahead of need · 2026-06-18
+- DISCARDED translating `httpx` errors in `download_voice` to
+  `InfrastructureError` · the catch-all already handles them; per-adapter
+  translation buys nothing today (Qwen/OSS already translate at their
+  boundary, Supabase/Telegram fall through to the catch-all) · 2026-06-18
+- Telegram `transaction_id` derived as `uuid5(ns, update_id)` instead of a
+  fresh `uuid4()` per webhook call · Telegram redelivers the same `update_id`
+  on retry, so a per-call uuid4 defeated hard rule 3 (idempotency) → duplicate
+  records of one audio. Deterministic key makes a redelivery hit the existing
+  row. PWA (M4) sends its own `crypto.randomUUID()` · 2026-06-18
+- Split `_handle_update` into router + `_process_message` · the catch-all
+  only covered the inner `try`, so update parsing before it (a `KeyError` on
+  `message["from"]`/`["date"]`, the early notifier sends) could still die
+  silently in the BackgroundTask. Now chat_id extraction is the only thing
+  outside the net (guarded: no sender → log + drop, nobody to reply to) and
+  ALL processing sits under one error policy · 2026-06-18
+- `_summary` PDF-link block widened to `except InfrastructureError` +
+  `except Exception` · building the presigned link must NEVER turn an
+  already-saved record into an error message to the advisor · 2026-06-18
+- `_store_prescription_pdf` now catches `Exception`, not just `StorageError` ·
+  a ReportLab render bug sat inside the try and ran BEFORE save_intervention,
+  so it blocked the legal record — contradicting the stated best-effort
+  intent. Now any render/upload failure logs + saves without a PDF key · 2026-06-18
+- `TelegramNotifier.send_message` adds `raise_for_status` + `except
+  httpx.HTTPError` -> log warning, never raise · notifications are
+  best-effort: a failed send must not break the flow nor make a saved record
+  look failed (it silently swallowed HTTP errors before) · 2026-06-18
+- Adopted `pytest` as a dev dependency (`uv run pytest` runs all) · reverses
+  the earlier "no pytest yet" note: it was written with a single test, now
+  there are 3 and running them one by one is friction. Only the *runner*
+  changes — still few tests, no exhaustive suite. Files keep their
+  `if __name__` block so they also run standalone · 2026-06-18
+
+## 2026-06-17 — M3 step 2: PDF upload to OSS (FLUJO A, PRESCRIPTION)
+
+- New async `Storage` port + `OssStorage` adapter (oss2) · uploading is network
+  I/O, so the port is async (mirror of PdfGenerator being sync CPU); the port
+  takes/returns bytes and never knows it is a PDF · 2026-06-17
+- `oss2` is a synchronous SDK → every network call wrapped in `asyncio.to_thread`
+  to keep the event loop free; OSS errors translated to `StorageError` at the
+  adapter boundary (provider-swap safe) · 2026-06-17
+- OSS key = `prescriptions/{transaction_id}.pdf` · transaction_id is known
+  BEFORE the INSERT, so the key is set on the entity and persisted in a single DB
+  write (no separate update method); deterministic key → a retry overwrites the
+  same object, consistent with idempotency · 2026-06-17
+- PDF+upload is BEST-EFFORT in the pipeline: on `StorageError` (or missing
+  holding) save the intervention with `prescription_pdf_key=None` · a storage
+  failure must never block the legal record (same principle as rule 8/AEMET); the
+  PDF is deterministic and regenerable from the row · 2026-06-17
+- Only the PRESCRIPTION branch generates the PDF (per spec FLUJO A) · a direct
+  EXECUTION's document is the CUE execution record (M5/M6), not a prescription · 2026-06-17
+- Added `Repository.get_holding` · the PDF needs the holding (owner/NIF/REA) and
+  the pipeline only had `plot.holding_id`; fetched lazily inside the PDF step so
+  OBSERVATION/EXECUTION don't pay the extra query · 2026-06-17
+- Private bucket: the advisor gets a presigned GET URL (1h expiry) appended to the
+  Telegram confirmation, not a public object URL · legal documents; chose the
+  link over `sendDocument` to avoid widening the Notifier port in M3 · 2026-06-17
+- Pipeline now depends on the `PdfGenerator` + `Storage` ports (injected via the
+  container) · keeps the core pure and the wiring a one-line composition-root
+  change · 2026-06-17
+
+## 2026-06-16 — M3 step 1: prescription PDF (ReportLab, no OSS yet)
+
+- Built the PDF generation first (port + ReportLab adapter), writing to disk,
+  before touching OSS · lets us validate the legal template fast without an
+  Alibaba bucket; OSS upload is step 2 · 2026-06-16
+- `PdfGenerator.generate_prescription` is SYNCHRONOUS, not async · building a PDF
+  is pure CPU (no I/O); async callers wrap it in asyncio.to_thread. The Storage
+  port (OSS) will be the async/I/O one · 2026-06-16
+- `generate_prescription` takes the domain entities (intervention, advisor,
+  holding, plot, product, equipment) directly, not a new DTO · simpler and
+  matches what the pipeline already resolves; a DTO would be abstraction ahead
+  of need · 2026-06-16
+- ReportLab via platypus (SimpleDocTemplate + Tables) instead of low-level
+  canvas · the document is a label/value form, tables handle layout/wrapping
+  for free · 2026-06-16
+- Timestamps rendered in Europe/Madrid via zoneinfo (hard rule 9); naive
+  datetimes treated as UTC · 2026-06-16
+- Sample generator lives in tests/ and writes sample_prescription.pdf (gitignored)
+  for visual review · not a real assertion suite, just an eyeball artifact · 2026-06-16
+
 ## 2026-06-16 — M2: fuzzy name resolution (ASR mis-hears proper nouns)
 
 - The ASR mis-transcribes proper nouns ("Abamectina"→"amavectina", "Finca de

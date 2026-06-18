@@ -1,8 +1,8 @@
 """Pipeline tests (M2) — one per FLUJO A edge case.
 
-No pytest dependency yet (methodology: no exhaustive suite). Run with:
-
-    uv run python tests/test_registration_pipeline.py
+Few tests by design (methodology: no exhaustive suite yet). Run the whole
+suite with ``uv run pytest`` or this file alone with
+``uv run python tests/test_registration_pipeline.py``.
 
 Uses in-memory fakes for the ports, so it never touches Supabase or Qwen.
 """
@@ -18,7 +18,14 @@ from uuid import UUID, uuid4
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.core.domain.errors import DoseError, MissingFieldError, PlotNotFoundError
-from app.core.domain.models import Advisor, Equipment, Intervention, Plot, Product
+from app.core.domain.models import (
+    Advisor,
+    Equipment,
+    Holding,
+    Intervention,
+    Plot,
+    Product,
+)
 from app.core.domain.schemas import ExtractedFields
 from app.core.services.registration_pipeline import RegistrationPipeline
 
@@ -71,14 +78,33 @@ class FakeRepo:
     async def get_equipment_by_alias(self, advisor_id, alias):
         return Equipment(holding_id=HOLD, equipment_alias=alias, id=EQ)
 
+    async def get_holding(self, holding_id):
+        return Holding(advisor_id=ADV, owner_name="Pepe", owner_nif="1",
+                       rea_regepa_number="R", id=HOLD)
+
     async def save_intervention(self, iv):
         self.saved = replace(iv, id=uuid4())
         return self.saved
 
 
+class FakePdf:
+    def generate_prescription(self, **kwargs):
+        return b"%PDF-fake"
+
+
+class FakeStorage:
+    async def upload(self, *, data, key, content_type):
+        pass
+
+    async def presigned_url(self, key, *, expires_seconds=3600):
+        return f"https://fake/{key}"
+
+
 async def _run(fields, repo=None):
     repo = repo or FakeRepo()
-    pipeline = RegistrationPipeline(FakeTranscriber(), FakeExtractor(fields), repo)
+    pipeline = RegistrationPipeline(
+        FakeTranscriber(), FakeExtractor(fields), repo, FakePdf(), FakeStorage()
+    )
     iv = await pipeline.register(
         audio=b"x", advisor_id=ADV, transaction_id=uuid4(), device_timestamp=NOW
     )
@@ -98,6 +124,7 @@ async def main():
         dose=1.5, dose_unit="L/ha", target_pest="araña roja", equipment_alias="tractor"))
     assert iv.lifecycle_state == "PRESCRIBED"
     assert iv.prescribed_dose == 1.5 and iv.equipment_id == EQ and iv.audit_state == "VALID"
+    assert iv.prescription_pdf_key is not None  # PDF rendered + stored (M3)
     print("2 PRESCRIPTION ok")
 
     iv, _ = await _run(ExtractedFields(
@@ -139,6 +166,11 @@ async def main():
     print("7 Idempotency ok")
 
     print("ALL PIPELINE TESTS PASSED")
+
+
+def test_registration_pipeline():
+    """pytest entry point; the async body lives in main()."""
+    asyncio.run(main())
 
 
 if __name__ == "__main__":
