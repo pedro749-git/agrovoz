@@ -1,24 +1,19 @@
 """Guard against the silent save trap (M2 review feedback).
 
 ``_serialize`` used to dump the whole dataclass; the day a model field stopped
-mapping to a real column, the INSERT blew up with an opaque PostgREST error,
-hard to trace. This test parses the columns of each table straight from the
-migration and asserts the serialized insert payload contains EXACTLY the
-columns the DB does not generate itself — so model<->schema drift fails HERE,
-loudly, instead of in production. No DB or credentials needed.
-
-Run: uv run python tests/test_serialize_columns.py
+mapping to a real column, the INSERT blew up with an opaque PostgREST error.
+This parses each table's columns straight from the migration and asserts the
+serialized insert payload contains EXACTLY the columns the DB does not generate
+itself — so model<->schema drift fails HERE, loudly. No DB or credentials needed.
+Run: uv run pytest tests/test_serialize_columns.py
 """
 
 import re
-import sys
 from datetime import date, datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
-# Run directly (uv run python tests/...): put the repo root on sys.path.
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT))
+import pytest
 
 from app.adapters.outbound.supabase_repo import _DB_GENERATED, _serialize
 from app.core.domain.models import (
@@ -31,6 +26,7 @@ from app.core.domain.models import (
 )
 from app.core.domain.states import LifecycleState
 
+ROOT = Path(__file__).resolve().parents[1]
 MIGRATION = next((ROOT / "supabase" / "migrations").glob("*.sql"))
 _SQL = MIGRATION.read_text()
 
@@ -76,24 +72,11 @@ CASES = [
 ]
 
 
-def main() -> None:
-    generated = set(_DB_GENERATED)
-    for table, obj in CASES:
-        payload = set(_serialize(obj).keys())
-        expected = _columns(table) - generated
-        assert payload == expected, (
-            f"{table}: serialize <-> schema drift.\n"
-            f"  in payload but not a column: {sorted(payload - expected)}\n"
-            f"  column but missing from payload: {sorted(expected - payload)}"
-        )
-        print(f"{table:<14} ok ({len(payload)} columns)")
-    print("ALL SERIALIZE/SCHEMA TESTS PASSED")
-
-
-def test_serialize_columns():
-    """pytest entry point."""
-    main()
-
-
-if __name__ == "__main__":
-    main()
+@pytest.mark.parametrize("table,obj", CASES, ids=[c[0] for c in CASES])
+def test_serialize_matches_schema(table, obj):
+    payload = set(_serialize(obj).keys())
+    expected = _columns(table) - set(_DB_GENERATED)
+    assert payload == expected, (
+        f"{table}: serialize <-> schema drift.\n"
+        f"  in payload but not a column: {sorted(payload - expected)}\n"
+        f"  column but missing from payload: {sorted(expected - payload)}")

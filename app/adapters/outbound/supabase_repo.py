@@ -26,6 +26,7 @@ from app.core.domain.models import (
     Plot,
     Product,
 )
+from app.core.domain.states import LifecycleState
 from app.core.ports.repository import Repository
 
 _client: AsyncClient | None = None
@@ -123,6 +124,35 @@ class SupabaseRepository(Repository):
             .execute()
         )
         return _deserialize(Advisor, res.data[0]) if res.data else None
+
+    async def get_advisor_by_auth_user_id(
+        self, auth_user_id: UUID
+    ) -> Advisor | None:
+        client = await get_client()
+        res = await (
+            client.table("advisors")
+            .select("*")
+            .eq("auth_user_id", str(auth_user_id))
+            .is_("deleted_at", "null")
+            .limit(1)
+            .execute()
+        )
+        return _deserialize(Advisor, res.data[0]) if res.data else None
+
+    async def list_interventions(
+        self, advisor_id: UUID, *, state: LifecycleState | None = None
+    ) -> list[Intervention]:
+        client = await get_client()
+        query = (
+            client.table("interventions")
+            .select("*")
+            .eq("advisor_id", str(advisor_id))
+            .is_("deleted_at", "null")
+        )
+        if state is not None:
+            query = query.eq("lifecycle_state", state.value)
+        res = await query.order("created_at", desc=True).limit(100).execute()
+        return [_deserialize(Intervention, row) for row in res.data]
 
     async def get_holding(self, holding_id: UUID) -> Holding | None:
         client = await get_client()

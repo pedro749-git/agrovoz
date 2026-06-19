@@ -10,8 +10,10 @@ import logging
 from datetime import datetime, timezone
 from uuid import UUID, uuid5
 
-from fastapi import BackgroundTasks, FastAPI, Request
+from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, Request, UploadFile
+from fastapi.responses import JSONResponse
 
+from app.adapters.inbound.auth import AuthError, current_advisor_id
 from app.adapters.outbound.telegram import download_voice
 from app.config import container
 from app.config.settings import settings
@@ -25,7 +27,61 @@ logger = logging.getLogger(__name__)
 # updates (any constant UUID works; it just must never change).
 _TELEGRAM_NS = UUID("9e3a7c1f-5b2d-4e8a-bf6c-1d2e3f4a5b6c")
 
+# Domain errors that mean "the advisor referenced something that does not
+# exist" map to 404; every other business-rule violation is a 422.
+_NOT_FOUND_CODES = {"PLOT_NOT_FOUND", "EQUIPMENT_NOT_FOUND"}
+
 app = FastAPI(title="GIP Advisor API")
+
+
+def _error(status: int, code: str, mensaje: str) -> JSONResponse:
+    """The single API error shape (spec §7): English code, Spanish message."""
+    return JSONResponse(status_code=status, content={"error": code, "mensaje": mensaje})
+
+
+@app.exception_handler(DomainError)
+async def _domain_error_handler(_: Request, exc: DomainError) -> JSONResponse:
+    """Business-rule violation -> 404/422 with the agronomist-readable message.
+
+    The error message IS the user feedback (it is written in Spanish at the
+    raise site), so it goes straight into ``mensaje``. Registered on the app
+    once so every HTTP route shares one policy — the Telegram webhook keeps its
+    own try/except because it answers over chat, not HTTP.
+    """
+    status = 404 if exc.code in _NOT_FOUND_CODES else 422
+    return _error(status, exc.code, str(exc))
+
+
+@app.exception_handler(AuthError)
+async def _auth_error_handler(_: Request, exc: AuthError) -> JSONResponse:
+    """Missing/invalid token or a user that is not an advisor -> 401."""
+    return _error(401, "AUTH_ERROR", str(exc))
+
+
+@app.exception_handler(InfrastructureError)
+async def _infra_error_handler(_: Request, exc: InfrastructureError) -> JSONResponse:
+    """External-provider failure (Qwen, OSS, ...) -> 503. Not the advisor's
+    fault and the cause may leak vendor details, so the message stays generic
+    and the traceback goes to the log."""
+    logger.exception("Infrastructure failure handling an API request")
+    return _error(
+        503,
+        "INFRASTRUCTURE_ERROR",
+        "Fallo técnico procesando el audio. Inténtalo de nuevo.",
+    )
+
+
+@app.exception_handler(Exception)
+async def _unexpected_error_handler(_: Request, exc: Exception) -> JSONResponse:
+    """Safety net for any error not translated above — a raw Supabase/PostgREST
+    failure (the repository adapter does not yet wrap its errors as
+    InfrastructureError; see decisions.md), a stray KeyError, etc. Returns a
+    clean 500 in our shape instead of FastAPI's default and logs the traceback.
+    Mirrors the Telegram webhook's catch-all. More specific handlers above still
+    win — FastAPI dispatches by exception type, not registration order.
+    """
+    logger.exception("Unhandled error in an API request")
+    return _error(500, "INTERNAL_ERROR", "Error inesperado. Inténtalo de nuevo.")
 
 
 def _transaction_id(update: dict) -> UUID:
@@ -51,6 +107,53 @@ async def telegram_webhook(request: Request, background: BackgroundTasks) -> dic
     # ACK now; the heavy work (download + Qwen + DB) runs after responding.
     background.add_task(_handle_update, update)
     return {"ok": True}
+
+
+@app.post("/api/records")
+async def create_record(
+    audio: UploadFile = File(...),
+    transaction_id: UUID = Form(...),
+    device_timestamp: datetime = Form(...),
+    advisor_id: UUID = Depends(current_advisor_id),
+) -> JSONResponse:
+    """FLUJO A for the PWA: an audio note -> persisted intervention (spec §7).
+
+    Unlike the Telegram webhook this is SYNCHRONOUS: the advisor's UI waits for
+    the outcome (a saved record to list, or a 422 dose/area error to show), so we
+    process inline and let the registered exception handlers translate any
+    failure into the {"error", "mensaje"} shape.
+
+    ``advisor_id`` comes from the verified Supabase JWT (``current_advisor_id``),
+    not a request field — the record is attributed to whoever is logged in. The
+    client still sends its own ``transaction_id`` (crypto.randomUUID) and the
+    device timestamp (hard rules 2 and 3).
+    """
+    intervention = await container.pipeline.register(
+        audio=await audio.read(),
+        advisor_id=advisor_id,
+        transaction_id=transaction_id,
+        device_timestamp=device_timestamp,
+    )
+    return JSONResponse(content=await _record_response(intervention))
+
+
+@app.get("/api/interventions")
+async def list_interventions(
+    state: LifecycleState | None = None,
+    advisor_id: UUID = Depends(current_advisor_id),
+) -> JSONResponse:
+    """The advisor's interventions for the PWA Home list (spec §7).
+
+    Scoped to the authenticated advisor (same dependency as POST). Optional
+    ``?state=`` filters by lifecycle; FastAPI validates it against the enum, so a
+    bad value is a 422 before this runs. Newest first. No presigned PDF links
+    here (one OSS call per row would not scale) — each item carries ``has_pdf``
+    and the detail view signs the URL on demand.
+    """
+    interventions = await container.repository.list_interventions(
+        advisor_id, state=state
+    )
+    return JSONResponse(content=[_record_fields(i) for i in interventions])
 
 
 async def _handle_update(update: dict) -> None:
@@ -118,6 +221,56 @@ async def _process_message(chat_id: str, message: dict, transaction_id: UUID) ->
         device_timestamp=device_timestamp,
     )
     await container.notifier.send_message(chat_id, await _summary(intervention))
+
+
+def _record_fields(intervention: Intervention) -> dict:
+    """Common record fields (sync, NO I/O), shared by the create response and the
+    list endpoint.
+
+    A focused projection, NOT the raw entity: internal traceability fields
+    (raw_transcription, prompt_version, storage keys) stay out of the API. Field
+    names are English (data identifiers); the PWA maps them to Spanish labels.
+    ``has_pdf`` lets the list show a PDF affordance without signing a URL per row.
+    """
+    dose = intervention.applied_dose or intervention.prescribed_dose
+    return {
+        "id": str(intervention.id),
+        "transaction_id": str(intervention.transaction_id),
+        "lifecycle_state": intervention.lifecycle_state.value,
+        "observation": intervention.observation,
+        "product_registration_number": intervention.product_registration_number,
+        "dose": dose,
+        "dose_unit": intervention.dose_unit,
+        "target_pest": intervention.target_pest,
+        "earliest_harvest_date": (
+            intervention.earliest_harvest_date.isoformat()
+            if intervention.earliest_harvest_date
+            else None
+        ),
+        "has_pdf": intervention.prescription_pdf_key is not None,
+    }
+
+
+async def _record_response(intervention: Intervention) -> dict:
+    """Create-response: the common fields PLUS a best-effort presigned PDF link.
+
+    Signing is per-record I/O, so it lives here (one record) and NOT in the list
+    endpoint. A signing failure must NOT turn an already-saved record into an
+    error response — we log and return the record without the link.
+    """
+    data = _record_fields(intervention)
+    data["pdf_url"] = None
+    if intervention.prescription_pdf_key:
+        try:
+            data["pdf_url"] = await container.storage.presigned_url(
+                intervention.prescription_pdf_key
+            )
+        except Exception:
+            logger.warning(
+                "No se pudo firmar el enlace del PDF (OSS); respuesta sin enlace",
+                exc_info=True,
+            )
+    return data
 
 
 async def _summary(intervention: Intervention) -> str:

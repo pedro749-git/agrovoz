@@ -1,21 +1,16 @@
-"""Pipeline tests (M2) — one per FLUJO A edge case.
+"""Pipeline tests (M2/M3) — one per FLUJO A edge case.
 
-Few tests by design (methodology: no exhaustive suite yet). Run the whole
-suite with ``uv run pytest`` or this file alone with
-``uv run python tests/test_registration_pipeline.py``.
-
-Uses in-memory fakes for the ports, so it never touches Supabase or Qwen.
+In-memory fakes for the ports, so it never touches Supabase or Qwen. Async
+bodies run via asyncio.run (no pytest-asyncio). Run:
+    uv run pytest tests/test_registration_pipeline.py
 """
 
 import asyncio
-import sys
 from dataclasses import replace
 from datetime import datetime, timezone
-from pathlib import Path
 from uuid import UUID, uuid4
 
-# Run directly (uv run python tests/...): put the repo root on sys.path.
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import pytest
 
 from app.core.domain.errors import DoseError, MissingFieldError, PlotNotFoundError
 from app.core.domain.models import (
@@ -103,75 +98,64 @@ class FakeStorage:
 async def _run(fields, repo=None):
     repo = repo or FakeRepo()
     pipeline = RegistrationPipeline(
-        FakeTranscriber(), FakeExtractor(fields), repo, FakePdf(), FakeStorage()
-    )
+        FakeTranscriber(), FakeExtractor(fields), repo, FakePdf(), FakeStorage())
     iv = await pipeline.register(
-        audio=b"x", advisor_id=ADV, transaction_id=uuid4(), device_timestamp=NOW
-    )
+        audio=b"x", advisor_id=ADV, transaction_id=uuid4(), device_timestamp=NOW)
     return iv, repo
 
 
-async def main():
-    iv, _ = await _run(ExtractedFields(
-        record_type="OBSERVATION", plot_alias="Finca de Pepe", observation="3 capturas"))
+def test_observation_is_persisted_without_product():
+    iv, _ = asyncio.run(_run(ExtractedFields(
+        record_type="OBSERVATION", plot_alias="Finca de Pepe", observation="3 capturas")))
     assert iv.lifecycle_state == "OBSERVATION"
     assert iv.observation == "3 capturas"
     assert iv.product_registration_number is None
-    print("1 OBSERVATION ok")
 
-    iv, _ = await _run(ExtractedFields(
+
+def test_prescription_renders_and_stores_pdf():
+    iv, _ = asyncio.run(_run(ExtractedFields(
         record_type="PRESCRIPTION", plot_alias="Finca de Pepe", product_name="Abamectina",
-        dose=1.5, dose_unit="L/ha", target_pest="araña roja", equipment_alias="tractor"))
+        dose=1.5, dose_unit="L/ha", target_pest="araña roja", equipment_alias="tractor")))
     assert iv.lifecycle_state == "PRESCRIBED"
-    assert iv.prescribed_dose == 1.5 and iv.equipment_id == EQ and iv.audit_state == "VALID"
+    assert iv.prescribed_dose == 1.5 and iv.equipment_id == EQ
+    assert iv.audit_state == "VALID"
     assert iv.prescription_pdf_key is not None  # PDF rendered + stored (M3)
-    print("2 PRESCRIPTION ok")
 
-    iv, _ = await _run(ExtractedFields(
+
+def test_execution_computes_earliest_harvest_from_phi():
+    iv, _ = asyncio.run(_run(ExtractedFields(
         record_type="EXECUTION", plot_alias="Finca de Pepe", product_name="Abamectina",
         dose=1.0, dose_unit="L/ha", target_pest="trips", equipment_alias="tractor",
-        treated_area_ha=2.0))
+        treated_area_ha=2.0)))
     assert iv.lifecycle_state == "EXECUTED"
     assert str(iv.earliest_harvest_date) == "2026-06-29"  # NOW + PHI(14)
     assert iv.treatment_date == NOW
-    print("3 EXECUTION + PHI ok")
 
-    try:
-        await _run(ExtractedFields(
+
+def test_dose_above_max_raises():
+    with pytest.raises(DoseError):
+        asyncio.run(_run(ExtractedFields(
             record_type="PRESCRIPTION", plot_alias="Finca de Pepe", product_name="Abamectina",
-            dose=1.6, dose_unit="L/ha", target_pest="x", equipment_alias="tractor"))
-        raise AssertionError("expected DoseError")
-    except DoseError:
-        print("4 DoseError ok")
+            dose=1.6, dose_unit="L/ha", target_pest="x", equipment_alias="tractor")))
 
-    try:
-        await _run(ExtractedFields(
+
+def test_missing_treatment_field_raises():
+    with pytest.raises(MissingFieldError):
+        asyncio.run(_run(ExtractedFields(
             record_type="PRESCRIPTION", plot_alias="Finca de Pepe", product_name="Abamectina",
-            dose=1.0, dose_unit="L/ha", target_pest="x"))
-        raise AssertionError("expected MissingFieldError")
-    except MissingFieldError:
-        print("5 MissingFieldError ok")
+            dose=1.0, dose_unit="L/ha", target_pest="x")))
 
-    try:
-        await _run(ExtractedFields(record_type="OBSERVATION", plot_alias="Finca Fantasma"))
-        raise AssertionError("expected PlotNotFoundError")
-    except PlotNotFoundError:
-        print("6 PlotNotFoundError ok")
 
+def test_unknown_plot_raises():
+    with pytest.raises(PlotNotFoundError):
+        asyncio.run(_run(ExtractedFields(
+            record_type="OBSERVATION", plot_alias="Finca Fantasma")))
+
+
+def test_idempotent_retry_returns_existing_row():
     repo = FakeRepo()
     repo.existing = Intervention(transaction_id=uuid4(), lifecycle_state="PRESCRIBED",
                                  advisor_id=ADV, holding_id=HOLD, plot_id=PLOT, id=uuid4())
-    iv, repo = await _run(ExtractedFields(record_type="OBSERVATION", plot_alias="Finca de Pepe"), repo)
+    iv, repo = asyncio.run(_run(
+        ExtractedFields(record_type="OBSERVATION", plot_alias="Finca de Pepe"), repo))
     assert iv is repo.existing and repo.saved is None  # idempotent: no insert
-    print("7 Idempotency ok")
-
-    print("ALL PIPELINE TESTS PASSED")
-
-
-def test_registration_pipeline():
-    """pytest entry point; the async body lives in main()."""
-    asyncio.run(main())
-
-
-if __name__ == "__main__":
-    asyncio.run(main())

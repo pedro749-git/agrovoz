@@ -24,12 +24,28 @@ from app.core.domain.models import (
     Plot,
     Product,
 )
+from app.core.domain.states import LifecycleState
 
 
 class Repository(ABC):
     @abstractmethod
     async def get_advisor(self, advisor_id: UUID) -> Advisor | None:
         """For the account_status == ACTIVE check (FLUJO A step 2)."""
+
+    @abstractmethod
+    async def get_advisor_by_auth_user_id(
+        self, auth_user_id: UUID
+    ) -> Advisor | None:
+        """Resolve the advisor from a verified Supabase JWT's ``sub`` (M4 auth):
+        ``advisors.auth_user_id`` links the row to the ``auth.users`` id."""
+
+    @abstractmethod
+    async def list_interventions(
+        self, advisor_id: UUID, *, state: LifecycleState | None = None
+    ) -> list[Intervention]:
+        """The advisor's interventions, newest first, optionally filtered by
+        lifecycle state (spec §7 GET /api/interventions). Powers the PWA Home
+        list. Filters ``deleted_at IS NULL`` like every read."""
 
     @abstractmethod
     async def get_holding(self, holding_id: UUID) -> Holding | None:

@@ -3,6 +3,94 @@
 One line per decision (taken AND discarded): what · why · date.
 This file becomes the thesis' design chapter.
 
+## 2026-06-19 — Test audit + suite standardization
+
+- Test style migrated from one monolithic main()+prints per file to one
+  function per case (pytest-native) · granular pass/fail reporting and failures
+  no longer hide the cases after them; standard idiom is more defensible for the
+  TFG · 2026-06-19
+- Adopt pytest.raises / parametrize / monkeypatch + a TestClient fixture · the
+  idiomatic tools now that pytest is the committed runner · 2026-06-19
+- No pytest-asyncio dependency · async bodies run via asyncio.run() inside sync
+  test functions; keeps the dev deps lean · 2026-06-19
+- pyproject [tool.pytest.ini_options] pythonpath=["."] · removes the per-file
+  sys.path hack; tests run only via `uv run pytest` (dropped the __main__
+  script-runners) · 2026-06-19
+- New coverage: validation_service, states, schemas (trust boundary), auth (M4),
+  api inbound (error→HTTP mapping). DELIBERATELY NOT covered: the thin SDK
+  adapters (qwen/oss/reportlab/telegram, supabase_repo body) — testing them is
+  mocking the SDK, low ROI; supabase_repo already has the serialize guard ·
+  2026-06-19
+- Audit found no behavioural bugs · confirmed dose/area limits are inclusive
+  (rule is >, not >=), error→HTTP mapping (404/422/503/500/401) and the catch-all
+  all behave as intended · 2026-06-19
+
+## 2026-06-19 — M4 step 3: list endpoint + API safety net
+
+- GET /api/interventions scoped to the authenticated advisor (same
+  current_advisor_id dependency), optional ?state= filter (enum-validated by
+  FastAPI → bad value is an automatic 422), newest first, limit 100 · spec §7 ·
+  2026-06-19
+- List uses a sync _record_fields projection (no presigned URL per row — N OSS
+  calls would not scale); carries has_pdf, the detail view signs on demand. The
+  create response = _record_fields + a single presigned pdf_url · 2026-06-19
+- "del día" date filter deferred to Home wiring · "today" is timezone-dependent
+  (Madrid vs UTC) and which timestamp to use is a UX call; decide it with the
+  real screen, not blind · 2026-06-19
+- App-level catch-all exception handler (Exception → 500 in {"error","mensaje"})
+  added · the HTTP routes had no safety net (unlike the Telegram webhook), so a
+  raw Supabase/PostgREST failure in the auth advisor-lookup OR the pipeline
+  leaked as a bare 500. More specific handlers still win (dispatch by type) ·
+  2026-06-19
+- DISCARDED (for now) translating repository errors into InfrastructureError at
+  the adapter boundary (the "correct" per errors.py) · touches every repo method;
+  the catch-all covers it cheaply for M4. Revisit when the repo grows · 2026-06-19
+
+## 2026-06-19 — M4 step 2: Supabase JWT auth (JWKS, ES256)
+
+- Verify the access token against the asymmetric signing keys via the JWKS
+  endpoint (derived from supabase_url), NOT the legacy HS256 shared secret ·
+  CLAUDE.md mandate; asymmetric verification needs only public keys, so no new
+  secret in .env · 2026-06-19
+- Backend verifies the JWT itself + uses service_role for DB (bypasses RLS) ·
+  the PWA talks to FastAPI, not to Supabase directly, so identity is enforced in
+  the backend; the migration's RLS is a second layer, not this path · 2026-06-19
+- advisor resolved by advisors.auth_user_id = token ``sub`` · a valid token whose
+  user is not an advisor → 401 (authenticated ≠ authorized) · 2026-06-19
+- Verification lives in its own inbound module app/adapters/inbound/auth.py (not
+  api.py, unlike the error handlers) · ~50 lines, self-contained, reused by
+  future routes — extraction earns its cost here · 2026-06-19
+- AuthError → 401 via its own exception_handler, same {"error","mensaje"} shape ·
+  auth is an HTTP-boundary concern, kept out of core domain errors · 2026-06-19
+- HTTPBearer(auto_error=False) · a missing header becomes our AuthError 401, not
+  FastAPI's default 403, so every auth failure shares one shape · 2026-06-19
+- JWKS fetch + jwt.decode run via asyncio.to_thread · blocking I/O kept off the
+  event loop; PyJWKClient caches keys, refetch only on unknown kid · 2026-06-19
+- Library: PyJWT[crypto] (cryptography backs ES256) · 2026-06-19
+
+## 2026-06-18 — M4 step 1: PWA inbound endpoint (POST /api/records)
+
+- Second inbound route over the SAME pipeline · hexagonal: Telegram and the PWA
+  are two inbound adapters on one core, no business-logic change (as api.py
+  already anticipated) · 2026-06-18
+- Synchronous (no background task, unlike Telegram) · the PWA UI waits for the
+  outcome to show (saved record or 422 dose/area error); Telegram backgrounds
+  only because it ACKs to avoid webhook-retry timeouts · 2026-06-18
+- Error translation via app-level `exception_handler` (not try/except per route)
+  · one policy shared by all HTTP routes; *_NOT_FOUND→404, other DomainError→422,
+  InfrastructureError→503 as {"error","mensaje"} (spec §7) · 2026-06-18
+- Handlers kept in api.py, NOT a separate error_handlers.py · only two + small,
+  and error→HTTP translation is the inbound adapter's own job; extract via
+  register_error_handlers(app) when it grows (>250 lines / more handlers) ·
+  2026-06-18
+- Auth deferred to M4 step 2 · reuse the default_advisor_id stand-in so the
+  endpoint is curl-testable now; JWKS JWT verification lands next · 2026-06-18
+- GPS left out of the request · pipeline.register doesn't take it and AEMET is
+  M5; a silently-dropped gps field would mislead. Add it with AEMET · 2026-06-18
+- Response is a focused JSON projection, not the raw Intervention · internal
+  traceability fields (raw_transcription, prompt_version, storage keys) stay out
+  of the API; best-effort presigned pdf_url like the Telegram summary · 2026-06-18
+
 ## 2026-06-18 — Review feedback: robust save + error catch-all
 
 - `_serialize` filters to real columns explicitly (skips DB-generated +

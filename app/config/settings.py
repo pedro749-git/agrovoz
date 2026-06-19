@@ -13,10 +13,11 @@ class Settings(BaseSettings):
     # Supabase
     supabase_url: str
     supabase_service_key: SecretStr
-    # JWT verification deferred to M4: the Telegram stand-in has no Supabase
-    # Auth, so there is no token to verify yet. When the PWA authenticates,
-    # verify via the asymmetric JWT signing keys (JWKS endpoint), not the
-    # legacy shared HS256 secret.
+    # JWT verification (M4): the PWA sends a Supabase access token; we verify it
+    # against the asymmetric signing keys (JWKS endpoint derived from
+    # supabase_url), never the legacy shared HS256 secret. No secret needed —
+    # only public keys. ``aud`` is the claim Supabase puts on access tokens.
+    supabase_jwt_aud: str = "authenticated"
 
     # DashScope (Qwen-Audio + Qwen Instruct)
     dashscope_api_key: SecretStr
