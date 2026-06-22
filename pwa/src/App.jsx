@@ -1,17 +1,33 @@
+import Recorder from './Recorder.jsx'
+
 function App() {
   return (
-    // Outer layer: full visible height + safe-area padding (keeps content off
-    // the notch and the bottom gesture bar). No design padding here.
-    <main className="flex min-h-dvh flex-col items-center justify-center bg-green-50 p-safe">
-      {/* Inner layer: the actual design padding and content. */}
-      <div className="flex flex-col items-center gap-4 p-6 text-center">
-        <h1 className="text-4xl font-bold text-green-800">Agrovoz</h1>
-        <p className="text-gray-600">Cuaderno fitosanitario por voz</p>
-        <span className="rounded-full bg-green-700 px-5 py-2 font-medium text-white shadow">
-          PWA lista ✓
-        </span>
-      </div>
-    </main>
+    // Full-height screen with the paper-like background and dark soil text.
+    <div className="flex min-h-dvh flex-col bg-bone text-soil">
+      {/* Top bar (prototype `.topbar`): dark olive, fills behind the notch.
+          `pt-safe` pushes its content below the notch; the olive background
+          still paints up into the safe area. */}
+      <header className="bg-olive-d px-4 pb-3 text-white pt-safe">
+        <div className="flex items-center gap-3 pt-3">
+          {/* Burger icon (three bars) — purely visual for now. */}
+          <div className="flex flex-col gap-[3px]">
+            <span className="h-0.5 w-4 rounded bg-white" />
+            <span className="h-0.5 w-4 rounded bg-white" />
+            <span className="h-0.5 w-4 rounded bg-white" />
+          </div>
+          <div>
+            <div className="text-sm font-semibold tracking-wide">AgroVoz</div>
+            <div className="text-[10px] opacity-70">Cuaderno de campo por voz</div>
+          </div>
+        </div>
+      </header>
+
+      {/* Center area: the record button. `flex-1` makes it fill the space
+          between the top bar and the bottom safe area. */}
+      <main className="flex flex-1 flex-col items-center justify-center px-6 pb-safe">
+        <Recorder />
+      </main>
+    </div>
   )
 }
 

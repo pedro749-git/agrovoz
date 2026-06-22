@@ -1,5 +1,23 @@
 @import "tailwindcss";
 
+/* --- Brand palette (from docs/agrovoz_prototipo.html) -----------------------
+   "Cultivated soil + phytosanitary" tones. Registered in Tailwind's theme so
+   each colour becomes a utility: --color-olive -> bg-olive / text-olive /
+   border-olive, etc. The default Tailwind colours stay available too. */
+@theme {
+  --color-soil: #1f1a14; /* main text on light */
+  --color-bone: #f3efe6; /* agronomic-paper background */
+  --color-card: #ffffff;
+  --color-line: #d9d2c4; /* hairlines / borders */
+  --color-olive: #5a6b35; /* brand · prescription */
+  --color-olive-d: #3f4d24; /* dark olive · top bar */
+  --color-terra: #b8442e; /* error · recording */
+  --color-amber: #c98a1b; /* pending */
+  --color-sky: #37607a; /* observation */
+  --color-moss: #7c8a52; /* valid */
+  --color-ink: #6b6354; /* soft ink · secondary text */
+}
+
 /* --- Safe-area utilities ----------------------------------------------------
    Modern phones have a notch/camera at the top and a gesture bar at the bottom.
    With `viewport-fit=cover` (set in index.html) the app paints edge-to-edge, so
