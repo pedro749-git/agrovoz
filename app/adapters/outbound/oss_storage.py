@@ -19,19 +19,33 @@ from app.core.ports.storage import Storage
 
 class OssStorage(Storage):
     def __init__(self) -> None:
-        auth = oss2.Auth(
-            settings.oss_access_key_id,
-            settings.oss_access_key_secret.get_secret_value(),
-        )
-        # The Bucket object is a lightweight, thread-safe client; build it once.
-        self._bucket = oss2.Bucket(
-            auth, settings.oss_endpoint, settings.oss_bucket_name
-        )
+        self._bucket: oss2.Bucket | None = None
+
+    def _get_bucket(self) -> oss2.Bucket:
+        """Build the bucket on first use (lazy), mirroring the Supabase client.
+
+        The ``oss2.Bucket`` constructor VALIDATES the endpoint, so building it in
+        ``__init__`` would make merely importing the app require a valid OSS
+        config — an empty ``OSS_ENDPOINT`` raises here. Deferring it keeps imports
+        (CI, unit tests that mock storage) free of OSS config; only a real
+        upload/sign touches it. The Bucket is a lightweight, thread-safe client
+        cached after the first call.
+        """
+        if self._bucket is None:
+            auth = oss2.Auth(
+                settings.oss_access_key_id,
+                settings.oss_access_key_secret.get_secret_value(),
+            )
+            self._bucket = oss2.Bucket(
+                auth, settings.oss_endpoint, settings.oss_bucket_name
+            )
+        return self._bucket
 
     async def upload(self, *, data: bytes, key: str, content_type: str) -> None:
+        bucket = self._get_bucket()
         try:
             await asyncio.to_thread(
-                self._bucket.put_object,
+                bucket.put_object,
                 key,
                 data,
                 headers={"Content-Type": content_type},
@@ -40,8 +54,9 @@ class OssStorage(Storage):
             raise StorageError(f"OSS upload failed for «{key}»") from exc
 
     async def presigned_url(self, key: str, *, expires_seconds: int = 3600) -> str:
+        bucket = self._get_bucket()
         # sign_url is local crypto (no network), so no to_thread needed.
         try:
-            return self._bucket.sign_url("GET", key, expires_seconds)
+            return bucket.sign_url("GET", key, expires_seconds)
         except oss2.exceptions.OssError as exc:
             raise StorageError(f"OSS sign_url failed for «{key}»") from exc

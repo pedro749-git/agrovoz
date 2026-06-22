@@ -3,6 +3,19 @@
 One line per decision (taken AND discarded): what · why · date.
 This file becomes the thesis' design chapter.
 
+## 2026-06-19 — CI green: lazy OSS bucket (surfaced by GitHub Actions)
+
+- OssStorage builds its oss2.Bucket lazily (_get_bucket on first use), not in
+  __init__ · the Bucket constructor validates the endpoint, so eager
+  construction made merely IMPORTING the app require a live OSS config; an empty
+  OSS_ENDPOINT (CI, no .env) crashed at collection. Now mirrors the Supabase
+  adapter's lazy client; imports/tests that mock storage need no OSS config ·
+  2026-06-19
+- GitHub Actions: pytest on push/PR via uv (uv sync --frozen); only the 4
+  no-default settings get dummy env values (telegram/supabase_url/
+  supabase_service_key/dashscope) — unit tests use fakes, never real services ·
+  2026-06-19
+
 ## 2026-06-19 — Test audit + suite standardization
 
 - Test style migrated from one monolithic main()+prints per file to one
