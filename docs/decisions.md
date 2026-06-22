@@ -3,6 +3,36 @@
 One line per decision (taken AND discarded): what · why · date.
 This file becomes the thesis' design chapter.
 
+## 2026-06-22 — M4 step 1: installable PWA scaffold (Vite + React + Tailwind)
+
+- Stack = Vite + React (JavaScript, not TypeScript) + Tailwind v4 + vite-plugin-pwa
+  · React has the most AI/tutorial/StackOverflow support (decisive for a frontend
+  beginner) and is the most defensible for a TFG; plain JS over TS to remove a
+  layer of complexity (backend already gives type rigor via Pydantic) · 2026-06-22
+- Tailwind ALONE, no Bootstrap (tutor suggested combining) · Tailwind already
+  covers the responsive need Bootstrap is known for, via sm:/md:/lg: breakpoints;
+  loading both = two competing CSS systems (conflicting resets, extra weight,
+  harder to understand — against the "code you fully understand" TFG rule). Pick
+  one · 2026-06-22
+- DISCARDED packaging as a native app (tutor's "native PWA" = TWA/Capacitor for
+  the Play Store) · the installable PWA already gives install + offline; store
+  packaging is post-MVP and only if store distribution is needed · 2026-06-22
+- Safe-area handling from the START (tutor's strongest point: device margins
+  differ per phone) · viewport-fit=cover in index.html + env(safe-area-inset-*)
+  exposed as reusable @utility classes (pt-safe/pb-safe/p-safe); every future
+  screen opts in with one class. Two-layer layout (safe padding on outer,
+  design padding on inner) so they don't override each other · 2026-06-22
+- min-h-dvh over min-h-screen (100vh) · 100vh miscalculates on mobile (browser
+  chrome shows/hides); dvh tracks the real visible height · 2026-06-22
+- HTTPS on the phone via a cloudflared quick tunnel (not Vite basic-ssl, not the
+  Chrome insecure-origin flag) · service worker AND getUserMedia need a secure
+  context; the tunnel gives a real trusted cert (no warnings), works off-Wi-Fi,
+  and unblocks both real WebAPK install and the M4-step-2 microphone. Over plain
+  LAN HTTP Chrome only offered a shortcut, not a true install · 2026-06-22
+- server.allowedHosts=true in vite.config · the tunnel forwards a *.trycloudflare.com
+  Host that changes each run and Vite's DNS-rebinding guard would block it; safe
+  as this is the dev server only · the tunnel is ephemeral (killed = private again) · 2026-06-22
+
 ## 2026-06-19 — CI green: lazy OSS bucket (surfaced by GitHub Actions)
 
 - OssStorage builds its oss2.Bucket lazily (_get_bucket on first use), not in

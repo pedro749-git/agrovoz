@@ -1,0 +1,28 @@
+@import "tailwindcss";
+
+/* --- Safe-area utilities ----------------------------------------------------
+   Modern phones have a notch/camera at the top and a gesture bar at the bottom.
+   With `viewport-fit=cover` (set in index.html) the app paints edge-to-edge, so
+   content must be padded away from those zones. `env(safe-area-inset-*)` is
+   filled in by EACH device with its own measurement (0 when there's nothing
+   there). Exposed here as Tailwind utilities so any screen can opt in with a
+   single class, e.g. a top bar uses `pt-safe`, a bottom button bar `pb-safe`. */
+@utility pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+@utility pr-safe {
+  padding-right: env(safe-area-inset-right);
+}
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+@utility pl-safe {
+  padding-left: env(safe-area-inset-left);
+}
+/* All four at once — for a full-screen container. */
+@utility p-safe {
+  padding-top: env(safe-area-inset-top);
+  padding-right: env(safe-area-inset-right);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+}
