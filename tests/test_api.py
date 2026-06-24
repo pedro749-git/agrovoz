@@ -98,6 +98,65 @@ def test_list_interventions_200(client, monkeypatch):
     assert r.status_code == 200 and len(r.json()) == 2
 
 
+def test_get_pdf_200(client, monkeypatch):
+    iv = _intervention()
+    iv.prescription_pdf_key = "prescriptions/x.pdf"
+
+    async def fake_get(intervention_id, advisor_id):
+        assert intervention_id == iv.id and advisor_id == ADV
+        return iv
+
+    async def fake_exists(key):
+        assert key == "prescriptions/x.pdf"
+        return True
+
+    async def fake_sign(key):
+        assert key == "prescriptions/x.pdf"
+        return "https://oss/signed"
+
+    monkeypatch.setattr(container.repository, "get_intervention", fake_get)
+    monkeypatch.setattr(container.storage, "exists", fake_exists)
+    monkeypatch.setattr(container.storage, "presigned_url", fake_sign)
+    r = client.get(f"/api/interventions/{iv.id}/pdf")
+    assert r.status_code == 200 and r.json()["pdf_url"] == "https://oss/signed"
+
+
+def test_get_pdf_404_when_object_missing(client, monkeypatch):
+    iv = _intervention()
+    iv.prescription_pdf_key = "prescriptions/gone.pdf"  # key in DB, object gone
+
+    async def fake_get(intervention_id, advisor_id):
+        return iv
+
+    async def fake_exists(key):
+        return False
+
+    monkeypatch.setattr(container.repository, "get_intervention", fake_get)
+    monkeypatch.setattr(container.storage, "exists", fake_exists)
+    r = client.get(f"/api/interventions/{iv.id}/pdf")
+    assert r.status_code == 404 and r.json()["error"] == "PDF_NOT_FOUND"
+
+
+def test_get_pdf_404_when_record_missing(client, monkeypatch):
+    async def fake_get(intervention_id, advisor_id):
+        return None  # not yours / does not exist -> indistinguishable 404
+
+    monkeypatch.setattr(container.repository, "get_intervention", fake_get)
+    r = client.get(f"/api/interventions/{uuid4()}/pdf")
+    assert r.status_code == 404 and r.json()["error"] == "INTERVENTION_NOT_FOUND"
+
+
+def test_get_pdf_404_when_no_pdf(client, monkeypatch):
+    iv = _intervention()  # prescription_pdf_key is None (e.g. an OBSERVATION)
+
+    async def fake_get(intervention_id, advisor_id):
+        return iv
+
+    monkeypatch.setattr(container.repository, "get_intervention", fake_get)
+    r = client.get(f"/api/interventions/{iv.id}/pdf")
+    assert r.status_code == 404 and r.json()["error"] == "PDF_NOT_FOUND"
+
+
 def test_post_without_token_401():
     # No dependency override -> the real auth dependency runs; no token -> 401.
     client = TestClient(api.app, raise_server_exceptions=False)

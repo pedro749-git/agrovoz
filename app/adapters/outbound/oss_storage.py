@@ -53,10 +53,28 @@ class OssStorage(Storage):
         except oss2.exceptions.OssError as exc:
             raise StorageError(f"OSS upload failed for «{key}»") from exc
 
+    async def exists(self, key: str) -> bool:
+        bucket = self._get_bucket()
+        try:
+            # HEAD via the SDK (network I/O -> worker thread).
+            return await asyncio.to_thread(bucket.object_exists, key)
+        except oss2.exceptions.OssError as exc:
+            raise StorageError(f"OSS object_exists failed for «{key}»") from exc
+
     async def presigned_url(self, key: str, *, expires_seconds: int = 3600) -> str:
         bucket = self._get_bucket()
+        # Serve the PDF as a download with a sensible filename. ``attachment``
+        # works reliably on desktop AND mobile, unlike inline rendering (which a
+        # browser setting like "download PDFs instead of opening them" overrides,
+        # and which mobile cannot show in a JS-opened tab). Only the disposition
+        # is overridden: the object already stores Content-Type application/pdf
+        # (set at upload), and OSS rejects a response-content-type override. This
+        # param is signed too.
+        params = {
+            "response-content-disposition": 'attachment; filename="prescripcion.pdf"',
+        }
         # sign_url is local crypto (no network), so no to_thread needed.
         try:
-            return bucket.sign_url("GET", key, expires_seconds)
+            return bucket.sign_url("GET", key, expires_seconds, params=params)
         except oss2.exceptions.OssError as exc:
             raise StorageError(f"OSS sign_url failed for «{key}»") from exc

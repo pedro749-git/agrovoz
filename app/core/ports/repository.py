@@ -53,6 +53,14 @@ class Repository(ABC):
         prescription PDF (owner, NIF, REA/REGEPA)."""
 
     @abstractmethod
+    async def get_intervention(
+        self, intervention_id: UUID, advisor_id: UUID
+    ) -> Intervention | None:
+        """A single intervention BY id, scoped to its advisor (PWA PDF link).
+        Scoping by advisor is the authorization check — you can only sign the
+        PDF of your own record. Filters ``deleted_at IS NULL`` like every read."""
+
+    @abstractmethod
     async def get_intervention_by_transaction_id(
         self, transaction_id: UUID
     ) -> Intervention | None:

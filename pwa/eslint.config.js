@@ -5,7 +5,8 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  // Build output and the PWA plugin's generated service worker — not our code.
+  globalIgnores(['dist', 'dev-dist']),
   {
     files: ['**/*.{js,jsx}'],
     extends: [

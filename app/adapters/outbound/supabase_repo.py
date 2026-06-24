@@ -166,6 +166,21 @@ class SupabaseRepository(Repository):
         )
         return _deserialize(Holding, res.data[0]) if res.data else None
 
+    async def get_intervention(
+        self, intervention_id: UUID, advisor_id: UUID
+    ) -> Intervention | None:
+        client = await get_client()
+        res = await (
+            client.table("interventions")
+            .select("*")
+            .eq("id", str(intervention_id))
+            .eq("advisor_id", str(advisor_id))  # scope = authorization
+            .is_("deleted_at", "null")
+            .limit(1)
+            .execute()
+        )
+        return _deserialize(Intervention, res.data[0]) if res.data else None
+
     async def get_intervention_by_transaction_id(
         self, transaction_id: UUID
     ) -> Intervention | None:

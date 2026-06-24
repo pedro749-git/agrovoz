@@ -13,6 +13,12 @@ export default defineConfig({
     // *.trycloudflare.com host that changes every run. Safe here — this is the
     // dev server only, run locally and shut down after use.
     allowedHosts: true,
+    // Forward the app's API calls to the FastAPI backend. The browser then sees
+    // a SINGLE origin (the Vite dev server / tunnel), so there is no CORS to
+    // configure: phone -> tunnel -> Vite -> proxy -> localhost:8000.
+    proxy: {
+      '/api': 'http://localhost:8000',
+    },
   },
   plugins: [
     react(),

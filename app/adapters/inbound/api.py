@@ -156,6 +156,40 @@ async def list_interventions(
     return JSONResponse(content=[_record_fields(i) for i in interventions])
 
 
+@app.get("/api/interventions/{intervention_id}/pdf")
+async def get_intervention_pdf(
+    intervention_id: UUID,
+    advisor_id: UUID = Depends(current_advisor_id),
+) -> JSONResponse:
+    """Sign the prescription PDF link ON DEMAND (spec §7 — the list deliberately
+    omits it; signing every row would be N OSS calls). Returns a short-lived
+    presigned URL the PWA opens in a new tab.
+
+    Scoped to the authenticated advisor: ``get_intervention`` filters by
+    advisor_id, so requesting another advisor's id is an indistinguishable 404
+    (you cannot probe what is not yours). A record without a PDF (an OBSERVATION,
+    or a prescription whose PDF render/upload failed) is also a 404 — there is no
+    document to hand back. A signing failure surfaces as the 503 from the
+    InfrastructureError handler.
+    """
+    intervention = await container.repository.get_intervention(
+        intervention_id, advisor_id
+    )
+    if intervention is None:
+        return _error(404, "INTERVENTION_NOT_FOUND", "No encuentro ese registro.")
+    if intervention.prescription_pdf_key is None:
+        return _error(404, "PDF_NOT_FOUND", "Este registro no tiene PDF de prescripción.")
+
+    # The DB key may outlive its object (uploaded to another bucket, deleted,
+    # ...). Check before signing so a missing object is a clean 404, not the
+    # provider's raw XML error in the browser.
+    if not await container.storage.exists(intervention.prescription_pdf_key):
+        return _error(404, "PDF_NOT_FOUND", "El PDF de este registro no está disponible.")
+
+    url = await container.storage.presigned_url(intervention.prescription_pdf_key)
+    return JSONResponse(content={"pdf_url": url})
+
+
 async def _handle_update(update: dict) -> None:
     """Route the update and apply ONE error policy over the whole processing.
 
@@ -237,6 +271,13 @@ def _record_fields(intervention: Intervention) -> dict:
         "id": str(intervention.id),
         "transaction_id": str(intervention.transaction_id),
         "lifecycle_state": intervention.lifecycle_state.value,
+        # DB-generated UTC timestamp. The PWA Home groups by day (in
+        # Europe/Madrid) to show "today's" records, so the list needs it; the
+        # device timestamp lives on prescription_date/treatment_date and is not
+        # set for OBSERVATIONs, so created_at is the one date every row carries.
+        "created_at": (
+            intervention.created_at.isoformat() if intervention.created_at else None
+        ),
         "observation": intervention.observation,
         "product_registration_number": intervention.product_registration_number,
         "dose": dose,

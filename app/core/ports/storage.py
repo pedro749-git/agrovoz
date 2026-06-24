@@ -18,6 +18,12 @@ class Storage(ABC):
         retry re-uploads the same object). Raises ``StorageError`` on failure."""
 
     @abstractmethod
+    async def exists(self, key: str) -> bool:
+        """Whether an object is stored under ``key`` (a HEAD). Lets a caller
+        return a clean 'no document' instead of handing out a signed URL whose
+        object is missing — which would surface the provider's raw error page."""
+
+    @abstractmethod
     async def presigned_url(self, key: str, *, expires_seconds: int = 3600) -> str:
         """A temporary signed URL to GET a private object (legal documents live
         in a private bucket). Default expiry: 1 hour."""

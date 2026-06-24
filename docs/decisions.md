@@ -3,6 +3,68 @@
 One line per decision (taken AND discarded): what · why · date.
 This file becomes the thesis' design chapter.
 
+## 2026-06-23 — M4 step 4: PWA wiring (auth + upload + today's list)
+
+- Magic-link auth via the official @supabase/supabase-js SDK (not a hand-rolled
+  fetch against /auth/v1/otp+verify) · the SDK handles the PKCE redirect, token
+  storage and silent refresh — reimplementing that is more code and more fragile,
+  against the "code you fully understand / simple thing that works" TFG rule ·
+  2026-06-23
+- Browser client uses the new PUBLISHABLE key (sb_publishable_…), not the legacy
+  anon key · Supabase's current public client key; exposed as VITE_* (public by
+  design — only grants what Auth+RLS allow). Secret key never reaches the bundle ·
+  2026-06-23
+- Dev cross-origin solved with a Vite proxy (/api → localhost:8000), NOT backend
+  CORS · the browser then sees one origin, so zero CORS config and it works
+  through the cloudflared tunnel (phone→tunnel→Vite→proxy→backend). Supabase Auth
+  calls go direct (Supabase sends its own CORS). DISCARDED adding CORSMiddleware ·
+  2026-06-23
+- Expose created_at in the API record projection · the Home "today" filter needs
+  one date present on EVERY row; prescription_date/treatment_date are null for
+  OBSERVATIONs, created_at (DB-generated) is the only universal one. Not a new DB
+  field — just lets an existing column out (resolves the 06-19 "deferred date
+  filter") · 2026-06-23
+- "Today" decided in Europe/Madrid via Intl.DateTimeFormat (not raw UTC date) ·
+  CLAUDE.md rule 9 (UTC stored, local rendered); a record at 00:30 Madrid is
+  today, not yesterday's UTC day · 2026-06-23
+- transaction_id (crypto.randomUUID) + device_timestamp captured ONCE when the
+  recording stops and reused on retry · hard rules 2+3: the device clock is the
+  treatment date, and a stable idempotency key means a network-error retry hits
+  the existing row instead of duplicating a legal record · 2026-06-23
+- Recording auto-uploads on an explicit "Enviar" tap, not on stop · the POST is
+  synchronous and slow (Qwen); the advisor reviews/replays the take first and a
+  failed upload retries the SAME take · 2026-06-23
+- TodayList fetches inline in the effect with an `active` guard + a refetch via
+  refreshKey/attempt counters (not a useCallback) · react-hooks 7's
+  set-state-in-effect rule can't see the await across a useCallback boundary;
+  inline keeps every setState provably post-await · 2026-06-23
+- PDF opened via a NEW endpoint GET /api/interventions/{id}/pdf that signs the
+  OSS URL on demand, not a URL embedded per list row · realises the list's
+  stated "sign on demand" design (one signing call only when tapped, not N per
+  list); new repo method get_intervention(id, advisor_id) where the advisor
+  scope IS the authorization (another advisor's id → indistinguishable 404) ·
+  2026-06-23
+- Record without a PDF (OBSERVATION, or failed render) → 404 PDF_NOT_FOUND, same
+  as a missing record · there is no document to return; endpoint raises no
+  domain errors, reusing the app-level handlers (repo crash → catch-all 500, OSS
+  signing failure → InfrastructureError 503), consistent with the other routes ·
+  2026-06-23
+- PWA DOWNLOADS the signed PDF in TWO taps: tap 1 signs the URL (async), tap 2
+  is a real <a> the user clicks · inline/new-tab lost to the browser's "download
+  PDFs" setting and mobile blank tabs; and a programmatic click / location change
+  AFTER the await is outside the user gesture, so mobile Chrome ignored it. A
+  genuine tap on a ready same-tab <a> (OSS attachment → downloads in place) is the
+  one thing that works on desktop AND mobile · 2026-06-23
+- presigned_url signs response-content-disposition=attachment;filename · forces
+  the download with a sensible name on every device. NOT response-content-type:
+  the object already stores Content-Type application/pdf (set at upload) and OSS
+  rejects overriding it ("can not override response header on content type") ·
+  2026-06-23
+- New Storage.exists (HEAD via oss2 object_exists), checked before signing the
+  PDF link · a DB key can outlive its object (other bucket / deleted), and a
+  signed URL to a missing object shows OSS's raw NoSuchKey XML in the browser;
+  the HEAD turns it into a clean 404 PDF_NOT_FOUND · 2026-06-23
+
 ## 2026-06-22 — M4 step 1: installable PWA scaffold (Vite + React + Tailwind)
 
 - Stack = Vite + React (JavaScript, not TypeScript) + Tailwind v4 + vite-plugin-pwa
