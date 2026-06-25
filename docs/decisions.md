@@ -3,6 +3,33 @@
 One line per decision (taken AND discarded): what · why · date.
 This file becomes the thesis' design chapter.
 
+## 2026-06-25 — M4: fix mobile PDF download (cross-origin attachment → blob)
+
+- PWA now FETCHES the signed PDF into memory and serves it via a same-origin
+  `blob:` URL (download attribute honoured), instead of linking the `<a>`
+  straight at the cross-origin OSS URL · navigating to a cross-origin attachment
+  silently does nothing on mobile (works on desktop): the `download` attribute is
+  ignored cross-origin and the phone swallows the same-tab navigation with NO
+  error — the classic "browser quietly refuses and never tells you". A
+  same-origin blob URL is the one thing that downloads reliably on desktop AND
+  mobile · 2026-06-25
+- Force `https://` on OSS_ENDPOINT (in `.env` AND a normaliser in OssStorage) ·
+  oss2 signs presigned URLs with the endpoint's scheme; an `http://` endpoint
+  produced an http URL that the HTTPS PWA refused to fetch as MIXED CONTENT (a
+  browser never lets an HTTPS page load an HTTP resource). The code normaliser is
+  belt-and-suspenders so a misconfigured `http://` value can't reintroduce it ·
+  2026-06-25
+- Added a CORS rule (allowed origin, GET) on the OSS bucket · once the URL was
+  HTTPS, OSS answered 200 but the browser blocked JS from READING the response
+  (no Access-Control-Allow-Origin) — a `fetch()` to another domain needs that
+  domain's explicit permission. Was a non-issue while we merely navigated to the
+  URL; it appears precisely because we now fetch it · 2026-06-25
+- KEPT the two-tap flow (prepare → download) · not a bug: the second tap is the
+  native user gesture mobile needs to save a file (a programmatic click/location
+  change after the await is outside the gesture and gets ignored). Robustness, on
+  purpose — extends the 06-23 two-tap decision, now also covering the fetch step ·
+  2026-06-25
+
 ## 2026-06-23 — M4 step 4: PWA wiring (auth + upload + today's list)
 
 - Magic-link auth via the official @supabase/supabase-js SDK (not a hand-rolled

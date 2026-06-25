@@ -2,13 +2,19 @@ import { useEffect, useState } from 'react'
 import { listInterventions, getPdfUrl } from './api.js'
 
 // Downloads a record's prescription PDF in TWO steps, on purpose:
-//   1. Tap "Preparar" -> sign the URL on demand (async).
+//   1. Tap "Preparar" -> sign the URL on demand, then fetch the PDF into memory
+//      and wrap it in a blob: URL (all async).
 //   2. Tap the resulting real <a> -> the browser downloads it.
-// The split matters on mobile Chrome: a programmatic click or a location change
-// fired AFTER the await (signing) is outside the user gesture and gets ignored,
-// so nothing downloaded. A genuine tap on a ready <a> is a native gesture the
-// browser always honours. OSS serves the PDF as an attachment, so the same-tab
-// link downloads in place without leaving the PWA.
+// The split matters on mobile: a programmatic click or a location change fired
+// AFTER the await is outside the user gesture and gets ignored, so nothing
+// downloads. A genuine tap on a ready <a> is a native gesture the browser
+// always honours.
+// We fetch into a blob: URL instead of linking straight to the signed OSS URL
+// because that URL is cross-origin: there the `download` attribute is ignored,
+// and mobile browsers silently swallow a same-tab navigation to a cross-origin
+// attachment (works on desktop, does nothing on phones). A blob: URL is
+// same-origin, so `download` is honoured and the file saves reliably without
+// leaving the PWA. (Requires CORS on the OSS bucket, since we now fetch it.)
 function PdfButton({ interventionId }) {
   const [status, setStatus] = useState('idle') // idle | loading | ready | error
   const [url, setUrl] = useState(null)
@@ -16,7 +22,10 @@ function PdfButton({ interventionId }) {
   async function prepare() {
     setStatus('loading')
     try {
-      setUrl(await getPdfUrl(interventionId))
+      const signed = await getPdfUrl(interventionId)
+      const res = await fetch(signed)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      setUrl(URL.createObjectURL(await res.blob()))
       setStatus('ready')
     } catch (err) {
       console.error(err)
@@ -24,10 +33,18 @@ function PdfButton({ interventionId }) {
     }
   }
 
+  // Free the blob: URL on unmount so we don't leak memory.
+  useEffect(() => {
+    return () => {
+      if (url) URL.revokeObjectURL(url)
+    }
+  }, [url])
+
   if (status === 'ready') {
     return (
       <a
         href={url}
+        download="prescripcion.pdf"
         className="mt-2 inline-block text-xs font-semibold text-olive underline"
       >
         📄 Descargar prescripción (PDF)
@@ -45,7 +62,7 @@ function PdfButton({ interventionId }) {
         ? 'Preparando…'
         : status === 'error'
           ? 'No se pudo preparar — reintentar'
-          : '📄 Preparar prescripción (PDF)'}
+          : '📄 Preparar prescripción (toca para generar PDF)'}
     </button>
   )
 }

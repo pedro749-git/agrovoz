@@ -36,8 +36,17 @@ class OssStorage(Storage):
                 settings.oss_access_key_id,
                 settings.oss_access_key_secret.get_secret_value(),
             )
+            # Force https:// on the endpoint: oss2 signs presigned URLs with the
+            # endpoint's scheme, and an http:// URL fetched from the HTTPS PWA is
+            # blocked as mixed content. Belt-and-suspenders behind OSS_ENDPOINT.
+            endpoint = settings.oss_endpoint
+            if endpoint.startswith("http://"):
+                endpoint = "https://" + endpoint[len("http://"):]
+            elif not endpoint.startswith("https://"):
+                endpoint = "https://" + endpoint
+
             self._bucket = oss2.Bucket(
-                auth, settings.oss_endpoint, settings.oss_bucket_name
+                auth, endpoint, settings.oss_bucket_name
             )
         return self._bucket
 
