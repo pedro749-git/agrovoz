@@ -45,8 +45,16 @@ class OssStorage(Storage):
             elif not endpoint.startswith("https://"):
                 endpoint = "https://" + endpoint
 
+            # connect_timeout caps both the TCP connect and per-read inactivity
+            # (oss2 passes it to requests). Explicit here to match the vendor
+            # timeout policy: a hung upload/HEAD runs in a worker thread, so
+            # without it a stall would tie up the pool (oss2 default is 60s × 3
+            # retries — too long for a field advisor).
             self._bucket = oss2.Bucket(
-                auth, endpoint, settings.oss_bucket_name
+                auth,
+                endpoint,
+                settings.oss_bucket_name,
+                connect_timeout=settings.vendor_timeout_seconds,
             )
         return self._bucket
 

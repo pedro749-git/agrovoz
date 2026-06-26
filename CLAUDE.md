@@ -29,7 +29,8 @@ rule: **each milestone must work end-to-end before starting the next.**
       JSON persisted to Supabase (all tables)
 - [x] M3 — Prescription PDF (ReportLab) + upload to OSS (verified end-to-end:
       real upload + presigned URL downloaded from a phone)
-- [ ] M4 — Minimal PWA: record button + today's list
+- [x] M4 — Minimal PWA: record button + today's list (auth + upload + today's
+      list + on-demand PDF download verified on a real phone)
 - [ ] M5 — Full state machine + execution confirmation + AEMET weather
 - [ ] M6 — Effectiveness assessment + delivery-note number
 - [ ] M7 — Campaign validations (signed PDF)

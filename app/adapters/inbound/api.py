@@ -73,12 +73,13 @@ async def _infra_error_handler(_: Request, exc: InfrastructureError) -> JSONResp
 
 @app.exception_handler(Exception)
 async def _unexpected_error_handler(_: Request, exc: Exception) -> JSONResponse:
-    """Safety net for any error not translated above — a raw Supabase/PostgREST
-    failure (the repository adapter does not yet wrap its errors as
-    InfrastructureError; see decisions.md), a stray KeyError, etc. Returns a
-    clean 500 in our shape instead of FastAPI's default and logs the traceback.
-    Mirrors the Telegram webhook's catch-all. More specific handlers above still
-    win — FastAPI dispatches by exception type, not registration order.
+    """Safety net for any error not translated above — a stray KeyError, a
+    serialization bug, etc. Provider failures ARE translated (Qwen/OSS ->
+    InfrastructureError, Supabase -> RepositoryError), so this should fire only
+    on genuine bugs. Returns a clean 500 in our shape instead of FastAPI's
+    default and logs the traceback. Mirrors the Telegram webhook's catch-all.
+    More specific handlers above still win — FastAPI dispatches by exception
+    type, not registration order.
     """
     logger.exception("Unhandled error in an API request")
     return _error(500, "INTERNAL_ERROR", "Error inesperado. Inténtalo de nuevo.")
@@ -219,9 +220,10 @@ async def _handle_update(update: dict) -> None:
         )
     except Exception:
         # Catch-all safety net: covers untranslated errors (raw httpx download,
-        # raw Supabase/PostgREST, a KeyError on a weird update) and any
-        # unexpected bug. logger.exception writes the full traceback — this is
-        # how you actually see *why* it failed.
+        # a KeyError on a weird update) and any unexpected bug. Supabase failures
+        # are now RepositoryError -> caught above as InfrastructureError.
+        # logger.exception writes the full traceback — this is how you actually
+        # see *why* it failed.
         logger.exception("Unexpected error handling Telegram update")
         await container.notifier.send_message(
             chat_id, "❌ Error inesperado. Inténtalo de nuevo."

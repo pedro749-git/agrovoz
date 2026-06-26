@@ -14,10 +14,12 @@ from enum import Enum
 from typing import get_args, get_type_hints
 from uuid import UUID
 
+from postgrest.exceptions import APIError
 from supabase import AsyncClient, create_async_client
 
 from app.adapters.outbound._fuzzy import best_match
 from app.config.settings import settings
+from app.core.domain.errors import RepositoryError
 from app.core.domain.models import (
     Advisor,
     Equipment,
@@ -31,6 +33,10 @@ from app.core.ports.repository import Repository
 
 _client: AsyncClient | None = None
 
+# Postgres SQLSTATE for a UNIQUE constraint violation (used for the idempotency
+# race in save_intervention).
+_UNIQUE_VIOLATION = "23505"
+
 
 async def get_client() -> AsyncClient:
     """Create the async Supabase client once and reuse it (singleton)."""
@@ -41,6 +47,22 @@ async def get_client() -> AsyncClient:
             settings.supabase_service_key.get_secret_value(),
         )
     return _client
+
+
+async def _run(query):
+    """Execute a PostgREST query, translating transport/DB failures.
+
+    Every read/write awaits ``.execute()`` here so a raw PostgREST ``APIError``
+    or an httpx network error becomes a port-level ``RepositoryError`` (inbound
+    -> 503), instead of leaking to the catch-all 500. Deserialization stays at
+    the call site on purpose: a mapping bug is a real 500, not infrastructure.
+    """
+    try:
+        return await query.execute()
+    except APIError as exc:
+        raise RepositoryError(f"Supabase/PostgREST error: {exc}") from exc
+    except Exception as exc:  # httpx network failure, timeout, ...
+        raise RepositoryError(f"Database call failed: {exc}") from exc
 
 
 # ── (De)serialization helpers ───────────────────────────────────────────────
@@ -115,13 +137,12 @@ def _serialize(obj) -> dict:
 class SupabaseRepository(Repository):
     async def get_advisor(self, advisor_id: UUID) -> Advisor | None:
         client = await get_client()
-        res = await (
+        res = await _run(
             client.table("advisors")
             .select("*")
             .eq("id", str(advisor_id))
             .is_("deleted_at", "null")
             .limit(1)
-            .execute()
         )
         return _deserialize(Advisor, res.data[0]) if res.data else None
 
@@ -129,13 +150,12 @@ class SupabaseRepository(Repository):
         self, auth_user_id: UUID
     ) -> Advisor | None:
         client = await get_client()
-        res = await (
+        res = await _run(
             client.table("advisors")
             .select("*")
             .eq("auth_user_id", str(auth_user_id))
             .is_("deleted_at", "null")
             .limit(1)
-            .execute()
         )
         return _deserialize(Advisor, res.data[0]) if res.data else None
 
@@ -151,18 +171,17 @@ class SupabaseRepository(Repository):
         )
         if state is not None:
             query = query.eq("lifecycle_state", state.value)
-        res = await query.order("created_at", desc=True).limit(100).execute()
+        res = await _run(query.order("created_at", desc=True).limit(100))
         return [_deserialize(Intervention, row) for row in res.data]
 
     async def get_holding(self, holding_id: UUID) -> Holding | None:
         client = await get_client()
-        res = await (
+        res = await _run(
             client.table("holdings")
             .select("*")
             .eq("id", str(holding_id))
             .is_("deleted_at", "null")
             .limit(1)
-            .execute()
         )
         return _deserialize(Holding, res.data[0]) if res.data else None
 
@@ -170,14 +189,13 @@ class SupabaseRepository(Repository):
         self, intervention_id: UUID, advisor_id: UUID
     ) -> Intervention | None:
         client = await get_client()
-        res = await (
+        res = await _run(
             client.table("interventions")
             .select("*")
             .eq("id", str(intervention_id))
             .eq("advisor_id", str(advisor_id))  # scope = authorization
             .is_("deleted_at", "null")
             .limit(1)
-            .execute()
         )
         return _deserialize(Intervention, res.data[0]) if res.data else None
 
@@ -185,13 +203,12 @@ class SupabaseRepository(Repository):
         self, transaction_id: UUID
     ) -> Intervention | None:
         client = await get_client()
-        res = await (
+        res = await _run(
             client.table("interventions")
             .select("*")
             .eq("transaction_id", str(transaction_id))
             .is_("deleted_at", "null")
             .limit(1)
-            .execute()
         )
         return _deserialize(Intervention, res.data[0]) if res.data else None
 
@@ -199,12 +216,11 @@ class SupabaseRepository(Repository):
         client = await get_client()
         # Fetch the advisor's plots (few) and fuzzy-match the dictated alias
         # against the real rows — the ASR mis-hears proper nouns.
-        res = await (
+        res = await _run(
             client.table("plots")
             .select("*, holdings!inner(advisor_id)")
             .eq("holdings.advisor_id", str(advisor_id))
             .is_("deleted_at", "null")
-            .execute()
         )
         row = best_match(voice_alias, res.data, "voice_alias")
         return _deserialize(Plot, row) if row else None
@@ -215,7 +231,7 @@ class SupabaseRepository(Repository):
         # (thousands), replace this full fetch with a pg_trgm similarity query.
         # No authorized filter here: an unauthorized hit still resolves, so the
         # validation service can raise the precise "not authorized" error.
-        res = await client.table("products").select("*").execute()
+        res = await _run(client.table("products").select("*"))
         row = best_match(trade_name, res.data, "trade_name")
         return _deserialize(Product, row) if row else None
 
@@ -223,21 +239,34 @@ class SupabaseRepository(Repository):
         self, advisor_id: UUID, equipment_alias: str
     ) -> Equipment | None:
         client = await get_client()
-        res = await (
+        res = await _run(
             client.table("equipment")
             .select("*, holdings!inner(advisor_id)")
             .eq("holdings.advisor_id", str(advisor_id))
             .is_("deleted_at", "null")
-            .execute()
         )
         row = best_match(equipment_alias, res.data, "equipment_alias")
         return _deserialize(Equipment, row) if row else None
 
     async def save_intervention(self, intervention: Intervention) -> Intervention:
         client = await get_client()
-        res = await (
-            client.table("interventions")
-            .insert(_serialize(intervention))
-            .execute()
-        )
+        insert = client.table("interventions").insert(_serialize(intervention))
+        try:
+            res = await insert.execute()
+        except APIError as exc:
+            # TOCTOU idempotency (hard rule 3): the pipeline pre-checks
+            # transaction_id, but two concurrent requests can both pass that
+            # check and INSERT. The UNIQUE(transaction_id) constraint rejects the
+            # loser; rather than surface a 503, return the row the winner saved —
+            # which is exactly what idempotency promises. Any OTHER unique
+            # violation finds no such row and re-raises as a real RepositoryError.
+            if exc.code == _UNIQUE_VIOLATION:
+                existing = await self.get_intervention_by_transaction_id(
+                    intervention.transaction_id
+                )
+                if existing is not None:
+                    return existing
+            raise RepositoryError(f"Supabase/PostgREST error: {exc}") from exc
+        except Exception as exc:
+            raise RepositoryError(f"Database call failed: {exc}") from exc
         return _deserialize(Intervention, res.data[0])

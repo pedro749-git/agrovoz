@@ -23,14 +23,20 @@ de empezar el siguiente.
       parcela/producto/equipo por alias dictado.
 - [x] **M3** — **Probado end-to-end.** PDF de prescripción (ReportLab) + subida a
       Alibaba Cloud OSS, con enlace firmado (caduca en 1h) descargado desde el móvil.
-- [ ] M4 — PWA mínima · M5 — máquina de estados + clima AEMET · M6 — evaluación
-      de eficacia · M7 — validaciones de campaña.
+- [x] **M4** — **Probado en un móvil real.** PWA instalable (React + Vite +
+      Tailwind): login por magic-link de Supabase, botón de grabación, subida del
+      audio al mismo pipeline, lista de registros de hoy y descarga del PDF bajo
+      demanda.
+- [ ] M5 — máquina de estados + confirmación de ejecución + clima AEMET ·
+      M6 — evaluación de eficacia + nº de albarán · M7 — validaciones de campaña.
 
 ## Stack
 
-Python 3.12 · FastAPI + Uvicorn · Pydantic V2 · Supabase (PostgreSQL) ·
-Qwen-Audio + Qwen Instruct vía DashScope · Alibaba Cloud OSS · ReportLab.
-Gestión de dependencias con `uv`.
+**Backend**: Python 3.12 · FastAPI + Uvicorn · Pydantic V2 · Supabase
+(PostgreSQL + Auth magic-link) · Qwen-Audio + Qwen Instruct vía DashScope ·
+Alibaba Cloud OSS · ReportLab. Dependencias con `uv`.
+
+**PWA (M4)**: React 19 + Vite + Tailwind + vite-plugin-pwa. Dependencias con `npm`.
 
 ## Arquitectura (hexagonal, desde M2)
 
@@ -44,10 +50,11 @@ app/
                outbound/ qwen.py · supabase_repo.py · oss_storage.py ·
                          reportlab_pdf.py · telegram.py
   config/      settings.py · container.py (composition root) · .env
+pwa/           React + Vite + Tailwind + vite-plugin-pwa (cliente M4)
 ```
 
-El núcleo solo depende de puertos (ABCs): el webhook de Telegram de hoy y la PWA
-de mañana llaman al **mismo** pipeline sin tocar lógica de negocio.
+El núcleo solo depende de puertos (ABCs): el webhook de Telegram y la PWA llaman
+al **mismo** pipeline (`POST /api/records`) sin tocar lógica de negocio.
 
 ## Instalación y ejecución local
 
@@ -84,6 +91,31 @@ curl -X POST "https://api.telegram.org/bot<TELEGRAM_TOKEN>/setWebhook" \
 ```
 
 Listo: envía una **nota de voz** al bot y responderá con el registro persistido.
+
+## PWA (M4)
+
+El cliente que usan los asesores. Necesita el backend levantado (sección
+anterior, puerto 8000). Desde la raíz del repo:
+
+**1. Instalar dependencias** (solo la primera vez)
+```bash
+cd pwa
+npm install
+```
+
+**2. Arrancar el servidor de desarrollo** (Vite, puerto 5173)
+```bash
+npm run dev
+```
+
+**3. Exponerla por HTTPS** (en otra terminal) — el micrófono y la instalación
+de la PWA exigen un origen seguro, así que para probar en el móvil hace falta un
+túnel HTTPS, no `http://localhost`:
+```bash
+cloudflared tunnel --url http://localhost:5173
+```
+Abre en el móvil la URL `https://…trycloudflare.com` que imprime, inicia sesión
+con el magic-link, graba una nota y aparecerá en la lista de hoy.
 
 ## Apagado seguro
 

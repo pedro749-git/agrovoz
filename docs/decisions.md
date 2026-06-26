@@ -463,3 +463,22 @@ This file becomes the thesis' design chapter.
 - One `Repository` ABC (not one per entity) with only FLUJO A's six methods ·
   a single port matches the spec layout and the single Supabase adapter;
   splitting per entity is abstraction ahead of need · 2026-06-12
+- Synchronous vendor SDKs run in worker threads get an explicit 30s transport
+  timeout (settings.vendor_timeout_seconds): DashScope `request_timeout` (default
+  300s) and OSS `connect_timeout` (default 60s × 3 retries) · high defaults hang
+  a field advisor AND leak the ThreadPoolExecutor until it saturates; the
+  transport timeout kills the request so the thread dies and surfaces as a domain
+  error · discarded `asyncio.wait_for` (returns control but leaves the thread
+  orphaned, pool still fills up); Supabase left untouched (async client, no
+  thread pool — different failure mode) · 2026-06-26
+- Repository wraps PostgREST/network failures as RepositoryError (a new
+  InfrastructureError subtype) via a single `_run()` helper around `.execute()` ·
+  a DB outage is infrastructure (inbound → 503 "retry"), not the catch-all 500
+  "bug"; deserialization stays OUTSIDE the wrap so a mapping bug remains a real
+  500 · 2026-06-26
+- save_intervention catches the UNIQUE(transaction_id) violation (SQLSTATE
+  23505) and returns the already-saved row · closes the TOCTOU between the
+  pipeline's idempotency pre-check and the INSERT: two concurrent same-tx
+  requests both pass the check, the constraint rejects the loser, and we honour
+  idempotency (hard rule 3) instead of returning a 503; any other unique
+  violation finds no row and re-raises · 2026-06-26

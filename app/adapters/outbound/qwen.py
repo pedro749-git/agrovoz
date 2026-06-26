@@ -50,6 +50,7 @@ class QwenTranscriber(Transcriber):
                 messages=[{"role": "user", "content": [{"audio": f"data:audio/ogg;base64,{b64}"}]}],
                 result_format="message",
                 asr_options={"language": "es", "enable_itn": True},
+                request_timeout=settings.vendor_timeout_seconds,
             )
         except Exception as exc:  # vendor/network failure
             raise TranscriptionError(str(exc)) from exc
@@ -91,6 +92,7 @@ class QwenExtractor(Extractor):
                 result_format="message",
                 response_format={"type": "json_object"},
                 temperature=0.1,
+                request_timeout=settings.vendor_timeout_seconds,
             )
         except Exception as exc:
             raise ExtractionError(str(exc)) from exc

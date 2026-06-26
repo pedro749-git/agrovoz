@@ -80,3 +80,12 @@ class WeatherError(InfrastructureError):
 
 class StorageError(InfrastructureError):
     """The object storage provider failed to upload/download a file."""
+
+
+class RepositoryError(InfrastructureError):
+    """The database/repository provider failed (network, PostgREST, constraint).
+
+    A DB outage is infrastructure, not the advisor's fault, so the inbound maps
+    it to 503 ("retry") rather than the catch-all 500 ("bug"). Idempotency races
+    (a UNIQUE-violation retry) are resolved in the adapter, not raised as this.
+    """

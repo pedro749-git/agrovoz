@@ -24,6 +24,12 @@ class Settings(BaseSettings):
     qwen_base_url: str = "https://dashscope-intl.aliyuncs.com"
     qwen_audio_model: str = "qwen3-asr-flash"
     qwen_instruct_model: str = "qwen-flash"
+    # Transport timeout (seconds) for synchronous vendor SDKs run in worker
+    # threads (DashScope/Qwen, OSS). Their defaults are high (DashScope 300s,
+    # oss2 60s × 3 retries), which leaves a field advisor hanging AND leaks the
+    # thread pool until it saturates. A hit fires the underlying requests/aiohttp
+    # timeout so the worker thread dies and the error surfaces as a domain error.
+    vendor_timeout_seconds: int = 30
 
     # Alibaba Cloud OSS
     oss_access_key_id: str = ""
