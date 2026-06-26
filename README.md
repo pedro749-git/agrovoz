@@ -92,6 +92,12 @@ curl -X POST "https://api.telegram.org/bot<TELEGRAM_TOKEN>/setWebhook" \
 
 Listo: envía una **nota de voz** al bot y responderá con el registro persistido.
 
+> **Telegram es el stand-in de M2 y solo hace una cosa: registrar una
+> intervención** (audio → registro persistido + PDF). No tiene autenticación por
+> asesor, ni lista de registros, ni descarga de PDF bajo demanda — todo eso vive
+> **solo en la PWA** (M4). Telegram se mantiene como vía rápida de prueba del
+> pipeline; el cliente real es la PWA.
+
 ## PWA (M4)
 
 El cliente que usan los asesores. Necesita el backend levantado (sección
@@ -119,12 +125,18 @@ con el magic-link, graba una nota y aparecerá en la lista de hoy.
 
 ## Apagado seguro
 
-Evita que Telegram bloquee el bot por reintentos contra una URL muerta:
+**Backend / Telegram** — evita que Telegram bloquee el bot por reintentos contra
+una URL muerta:
 
 ```bash
 curl -X POST "https://api.telegram.org/bot<TELEGRAM_TOKEN>/deleteWebhook"
 ```
 Luego detén Uvicorn (`Ctrl + C`) y Ngrok (`Ctrl + C`).
+
+**PWA** — basta con `Ctrl + C` en las dos terminales: primero el túnel
+(`cloudflared`) y después Vite (`npm run dev`). Al cerrar el túnel, la URL
+`trycloudflare.com` deja de existir (son efímeras), así que no hay nada que
+revocar.
 
 ## Tests
 
@@ -135,10 +147,17 @@ Toda la suite de golpe:
 uv run pytest
 ```
 
-Cada archivo también se puede ejecutar suelto (sin pytest):
+La suite cubre:
 
-```bash
-uv run python tests/test_registration_pipeline.py   # casos del FLUJO A
-uv run python tests/test_serialize_columns.py        # modelo <-> columnas de la BD
-uv run python tests/test_fuzzy_lookup.py             # búsqueda difusa por alias
-```
+| Archivo | Qué prueba |
+| --- | --- |
+| `test_registration_pipeline.py` | el FLUJO A de punta a punta (con puertos falsos) |
+| `test_validation_service.py` | validación legal (dosis, área, producto autorizado) |
+| `test_schemas.py` | `ExtractedFields` (saneado de la salida del LLM) |
+| `test_serialize_columns.py` | modelo de dominio ↔ columnas de la BD (sin drift) |
+| `test_fuzzy_lookup.py` | búsqueda difusa de parcela/producto/equipo por alias |
+| `test_states.py` | transiciones de la máquina de estados |
+| `test_auth.py` | verificación del JWT de Supabase (`current_advisor_id`) |
+| `test_api.py` | endpoints y mapeo de errores a `{error, mensaje}` |
+
+Para un archivo suelto: `uv run pytest tests/test_registration_pipeline.py`.
