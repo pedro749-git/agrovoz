@@ -3,6 +3,70 @@
 One line per decision (taken AND discarded): what · why · date.
 This file becomes the thesis' design chapter.
 
+## 2026-06-29 — Architecture: functional core for single-concept domain rules
+
+- KEPT the anemic-dataclass + transaction-script-service style on purpose · the
+  real invariants here are cross-entity (dose ≤ product.max_allowed_dose, area ≤
+  plot.enclosure_area_ha), so they live naturally in services, not on one
+  entity. Fowler's anemic-model critique targets large OO systems; for a small,
+  solo TFG domain a transaction script is the "code you fully understand" choice
+  (CLAUDE.md). NOT migrating to rich aggregates · 2026-06-29
+- ADDED `states.transition(intervention, new)` as the SINGLE gate for state
+  changes (validate_transition then mutate) · stops any service from leaving an
+  intervention in an illegal state by assigning `lifecycle_state` directly. Type
+  hint imported under TYPE_CHECKING to avoid the models↔states circular import ·
+  2026-06-29
+- ADDED `core/domain/calculations.py` for pure single-concept domain rules and
+  moved `earliest_harvest_date` there (was inline in registration_pipeline) · the
+  M5 execution service will compute the same value, so a shared pure function is
+  one source of truth instead of a copy-paste. Rule of thumb logged for the
+  thesis: data in dataclasses · single-concept rules in domain functions
+  (states.py, calculations.py) · cross-entity rules + orchestration + I/O in
+  services. DISCARDED adding the ITEAF-expiry check now — it needs the inspection
+  validity period decided first, so it waits for M5 (no speculative code) ·
+  2026-06-29
+
+## 2026-06-29 — M5 step 1: FLUJO B backend (execution confirmation, no weather)
+
+- ADDED `ExecutionService.confirm` (FLUJO B) mirroring `RegistrationPipeline`: a
+  class with the Repository injected, wired in container.py · symmetry with FLUJO
+  A · 2026-06-29
+- State change goes through `states.transition` (the single gate): only
+  PRESCRIBED -> EXECUTED. A double confirm fails there (EXECUTED -> EXECUTED is
+  illegal), so NO idempotency key is needed for this endpoint · 2026-06-29
+- Re-validate legality with the REAL dose/area at execution (hard rule 5): the
+  prescription was validated at creation, but applied figures can differ. Reuses
+  the extracted `validate_legality` (one source of truth) and needs two new repo
+  getters: `get_plot(id)` and `get_product_by_registration_number` · 2026-06-29
+- `treatment_date` is a SINGLE client-sent value, not a pair · the server cannot
+  do a "device-clock" fallback without using its own clock (forbidden by hard
+  rule 2); the PWA prefills the field with the device clock (editable for a
+  treatment applied days earlier), so the date is never absent · DISCARDED
+  passing device_timestamp + optional treatment_date · 2026-06-29
+- DEFERRED letting a DIRECT execution (voice, FLUJO A) carry an explicit past
+  date · it would need a new ExtractedFields date + prompt change (more scope,
+  touches the LLM); the prescribe->confirm path already covers "applied earlier" ·
+  2026-06-29
+- Endpoint `PATCH /api/interventions/{id}/execution` uses `Form(...)` fields, NOT
+  a Pydantic body model · consistency: create_record already uses Form and the
+  PWA sends FormData; there are zero request models today, so adding one (and a
+  DTO module for a single class) would be abstraction ahead of need. CRITERION
+  for later: if endpoints grow rich/nested JSON bodies, introduce Pydantic models
+  in a dedicated module and migrate all at once · 2026-06-29
+
+## 2026-06-29 — Known gap: Supabase client has no explicit timeout (TODO)
+
+- NOTED, not yet fixed · `get_client()` calls `create_async_client` with no
+  `ClientOptions`, so DB queries inherit supabase-py's default
+  `postgrest_client_timeout = 120s` (handed to the underlying httpx client; NOT
+  httpx's own 5s). `_run` translates the eventual ReadTimeout to RepositoryError
+  → 503, but only after ~120s. Qwen/OSS/Telegram are bounded at 30s
+  (`vendor_timeout_seconds`); Supabase is the outlier and it sits on the
+  synchronous PWA paths (`POST /api/records`, `PATCH .../execution`) where the
+  advisor waits. FIX when convenient: pass
+  `ClientOptions(postgrest_client_timeout=settings.vendor_timeout_seconds)` ·
+  2026-06-29
+
 ## 2026-06-29 — M4: login by email OTP code + password (drop magic link)
 
 - REPLACED the magic-link login with an email **OTP code** (6 digits) as the

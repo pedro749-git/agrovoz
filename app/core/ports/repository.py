@@ -71,8 +71,20 @@ class Repository(ABC):
     async def get_plot_by_alias(self, advisor_id: UUID, voice_alias: str) -> Plot | None: ...
 
     @abstractmethod
+    async def get_plot(self, plot_id: UUID) -> Plot | None:
+        """A single plot BY id — FLUJO B (M5) re-validates the real treated area
+        against ``plot.enclosure_area_ha`` (hard rule 5)."""
+
+    @abstractmethod
     async def get_product_by_name(self, trade_name: str) -> Product | None:
         """Lookup in the MAPA vademecum by the trade name the advisor dictated."""
+
+    @abstractmethod
+    async def get_product_by_registration_number(
+        self, registration_number: str
+    ) -> Product | None:
+        """Lookup by the MAPA registration number stored on the intervention —
+        FLUJO B (M5) re-validates the real dose against ``max_allowed_dose``."""
 
     @abstractmethod
     async def get_equipment_by_alias(
@@ -82,3 +94,8 @@ class Repository(ABC):
     @abstractmethod
     async def save_intervention(self, intervention: Intervention) -> Intervention:
         """Insert and return the persisted row (with DB-generated id/timestamps)."""
+
+    @abstractmethod
+    async def update_intervention(self, intervention: Intervention) -> Intervention:
+        """Persist changes to an existing intervention (matched by id) and return
+        the updated row. FLUJO B (M5): PRESCRIBED -> EXECUTED."""

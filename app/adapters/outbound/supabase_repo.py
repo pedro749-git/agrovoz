@@ -225,6 +225,17 @@ class SupabaseRepository(Repository):
         row = best_match(voice_alias, res.data, "voice_alias")
         return _deserialize(Plot, row) if row else None
 
+    async def get_plot(self, plot_id: UUID) -> Plot | None:
+        client = await get_client()
+        res = await _run(
+            client.table("plots")
+            .select("*")
+            .eq("id", str(plot_id))
+            .is_("deleted_at", "null")
+            .limit(1)
+        )
+        return _deserialize(Plot, res.data[0]) if res.data else None
+
     async def get_product_by_name(self, trade_name: str) -> Product | None:
         client = await get_client()
         # M2: fuzzy-match over the (small) seeded catalog. At vademecum scale
@@ -234,6 +245,20 @@ class SupabaseRepository(Repository):
         res = await _run(client.table("products").select("*"))
         row = best_match(trade_name, res.data, "trade_name")
         return _deserialize(Product, row) if row else None
+
+    async def get_product_by_registration_number(
+        self, registration_number: str
+    ) -> Product | None:
+        # Exact lookup by natural PK (no fuzzy match, no deleted_at: the
+        # products catalog is read-only and not soft-deleted).
+        client = await get_client()
+        res = await _run(
+            client.table("products")
+            .select("*")
+            .eq("registration_number", registration_number)
+            .limit(1)
+        )
+        return _deserialize(Product, res.data[0]) if res.data else None
 
     async def get_equipment_by_alias(
         self, advisor_id: UUID, equipment_alias: str
@@ -269,4 +294,24 @@ class SupabaseRepository(Repository):
             raise RepositoryError(f"Supabase/PostgREST error: {exc}") from exc
         except Exception as exc:
             raise RepositoryError(f"Database call failed: {exc}") from exc
+        return _deserialize(Intervention, res.data[0])
+
+    async def update_intervention(self, intervention: Intervention) -> Intervention:
+        # Match by id and rewrite the full column set (_serialize already drops
+        # DB-generated columns). deleted_at IS NULL guards against touching a
+        # soft-deleted legal record. Goes through _run, so a unique/network/
+        # timeout failure is already translated to RepositoryError; no INSERT-
+        # style idempotency handling applies (we update one existing row and
+        # never change its transaction_id). No row matched -> a real bug.
+        client = await get_client()
+        res = await _run(
+            client.table("interventions")
+            .update(_serialize(intervention))
+            .eq("id", str(intervention.id))
+            .is_("deleted_at", "null")
+        )
+        if not res.data:
+            raise RepositoryError(
+                f"update_intervention matched no row (id={intervention.id})"
+            )
         return _deserialize(Intervention, res.data[0])

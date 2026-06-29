@@ -48,6 +48,12 @@ class EquipmentNotFoundError(DomainError):
     code = "EQUIPMENT_NOT_FOUND"
 
 
+class InterventionNotFoundError(DomainError):
+    """No intervention with that id belongs to this advisor (FLUJO B, M5)."""
+
+    code = "INTERVENTION_NOT_FOUND"
+
+
 class StateTransitionError(DomainError):
     """Illegal lifecycle transition (e.g. assess before execute)."""
 

@@ -10,13 +10,19 @@ from app.core.domain.models import Plot, Product
 from app.core.domain.schemas import ExtractedFields
 
 
-def validate_registration(
-    fields: ExtractedFields, plot: Plot, product: Product | None
+def validate_legality(
+    *,
+    dose: float | None,
+    dose_unit: str | None,
+    treated_area_ha: float | None,
+    plot: Plot,
+    product: Product | None,
 ) -> None:
-    """Raise on the first legal violation; return None if everything is legal.
+    """The legal checks over plain values. Raise on the first violation.
 
-    OBSERVATION records carry no product/dose, so only the area check (if any)
-    applies to them.
+    Shared source of truth: FLUJO A validates the EXTRACTED values (via
+    ``validate_registration``); FLUJO B (M5) re-validates the REAL applied dose
+    and area at execution time. Both call this with the same plot/product.
     """
     if product is not None:
         # Product must be authorized in the MAPA vademecum.
@@ -26,22 +32,37 @@ def validate_registration(
             )
         # Applied/prescribed dose must not exceed the legal maximum.
         if (
-            fields.dose is not None
+            dose is not None
             and product.max_allowed_dose is not None
-            and fields.dose > float(product.max_allowed_dose)
+            and dose > float(product.max_allowed_dose)
         ):
             raise DoseError(
-                f"Dosis {fields.dose} {fields.dose_unit or ''} supera el máximo "
+                f"Dosis {dose} {dose_unit or ''} supera el máximo "
                 f"legal de {product.max_allowed_dose} {product.dose_unit or ''} "
                 f"para «{product.trade_name}»."
             )
 
     # Treated area can never exceed the SIGPAC enclosure area.
-    if (
-        fields.treated_area_ha is not None
-        and fields.treated_area_ha > float(plot.enclosure_area_ha)
-    ):
+    if treated_area_ha is not None and treated_area_ha > float(plot.enclosure_area_ha):
         raise AreaError(
-            f"Superficie tratada {fields.treated_area_ha} ha supera la del "
+            f"Superficie tratada {treated_area_ha} ha supera la del "
             f"recinto SIGPAC ({plot.enclosure_area_ha} ha)."
         )
+
+
+def validate_registration(
+    fields: ExtractedFields, plot: Plot, product: Product | None
+) -> None:
+    """Raise on the first legal violation; return None if everything is legal.
+
+    OBSERVATION records carry no product/dose, so only the area check (if any)
+    applies to them. Thin wrapper over ``validate_legality`` with the extracted
+    values.
+    """
+    validate_legality(
+        dose=fields.dose,
+        dose_unit=fields.dose_unit,
+        treated_area_ha=fields.treated_area_ha,
+        plot=plot,
+        product=product,
+    )

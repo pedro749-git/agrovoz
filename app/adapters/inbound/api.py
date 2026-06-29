@@ -29,7 +29,7 @@ _TELEGRAM_NS = UUID("9e3a7c1f-5b2d-4e8a-bf6c-1d2e3f4a5b6c")
 
 # Domain errors that mean "the advisor referenced something that does not
 # exist" map to 404; every other business-rule violation is a 422.
-_NOT_FOUND_CODES = {"PLOT_NOT_FOUND", "EQUIPMENT_NOT_FOUND"}
+_NOT_FOUND_CODES = {"PLOT_NOT_FOUND", "EQUIPMENT_NOT_FOUND", "INTERVENTION_NOT_FOUND"}
 
 app = FastAPI(title="GIP Advisor API")
 
@@ -189,6 +189,41 @@ async def get_intervention_pdf(
 
     url = await container.storage.presigned_url(intervention.prescription_pdf_key)
     return JSONResponse(content={"pdf_url": url})
+
+
+@app.patch("/api/interventions/{intervention_id}/execution")
+async def confirm_execution(
+    intervention_id: UUID,
+    treatment_date: datetime = Form(...),
+    applied_dose: float | None = Form(None),
+    treated_area_ha: float | None = Form(None),
+    operator_name: str | None = Form(None),
+    operator_ropo: str | None = Form(None),
+    spray_volume_l_ha: float | None = Form(None),
+    delivery_note_number: str | None = Form(None),
+    advisor_id: UUID = Depends(current_advisor_id),
+) -> JSONResponse:
+    """FLUJO B (M5): confirm a prescription's execution with the real applied
+    data — PRESCRIBED -> EXECUTED, re-validating legality with the real dose/area.
+
+    Synchronous like POST /api/records (the UI waits for the updated record, or a
+    422 dose/area/state error). Form-encoded for consistency with create_record.
+    ``treatment_date`` is the real application date the PWA prefills with the
+    device clock (editable); the other fields default to the prescribed/holding
+    values when omitted. Scoped to the authenticated advisor, so an unknown id is
+    a 404. Weather is NOT captured here yet (next M5 step)."""
+    intervention = await container.execution_service.confirm(
+        intervention_id=intervention_id,
+        advisor_id=advisor_id,
+        treatment_date=treatment_date,
+        applied_dose=applied_dose,
+        treated_area_ha=treated_area_ha,
+        operator_name=operator_name,
+        operator_ropo=operator_ropo,
+        spray_volume_l_ha=spray_volume_l_ha,
+        delivery_note_number=delivery_note_number,
+    )
+    return JSONResponse(content=await _record_response(intervention))
 
 
 async def _handle_update(update: dict) -> None:
