@@ -4,9 +4,18 @@ Legal records never move backwards: corrections are a new intervention plus
 a soft-delete of the old one.
 """
 
+from __future__ import annotations
+
 from enum import StrEnum
+from typing import TYPE_CHECKING
 
 from app.core.domain.errors import StateTransitionError
+
+if TYPE_CHECKING:
+    # Type-only import: models.py imports this module, so importing it back at
+    # runtime would be a circular import. `from __future__ import annotations`
+    # keeps the hint as a string, evaluated only by the type checker.
+    from app.core.domain.models import Intervention
 
 
 class LifecycleState(StrEnum):
@@ -31,3 +40,9 @@ VALID_TRANSITIONS: dict[LifecycleState | None, set[LifecycleState]] = {
 def validate_transition(current: LifecycleState | None, new: LifecycleState) -> None:
     if new not in VALID_TRANSITIONS.get(current, set()):
         raise StateTransitionError(f"{current} → {new} not allowed")
+
+
+def transition(intervention: Intervention, new: LifecycleState) -> None:
+    """The single gate for changing state: check first, then mutate."""
+    validate_transition(intervention.lifecycle_state, new)
+    intervention.lifecycle_state = new

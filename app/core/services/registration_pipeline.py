@@ -12,9 +12,10 @@ decides how to surface that.
 
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from uuid import UUID
 
+from app.core.domain.calculations import earliest_harvest_date
 from app.core.domain.errors import (
     DomainError,
     EquipmentNotFoundError,
@@ -251,8 +252,7 @@ class RegistrationPipeline:
         intervention.spray_volume_l_ha = fields.spray_volume_l_ha
         intervention.operator_name = fields.operator_name
         intervention.operator_ropo = fields.operator_ropo
-        if product.pre_harvest_interval_days is not None:
-            intervention.earliest_harvest_date = device_timestamp.date() + timedelta(
-                days=product.pre_harvest_interval_days
-            )
+        intervention.earliest_harvest_date = earliest_harvest_date(
+            device_timestamp, product.pre_harvest_interval_days
+        )
         return intervention
