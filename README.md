@@ -24,7 +24,7 @@ de empezar el siguiente.
 - [x] **M3** — **Probado end-to-end.** PDF de prescripción (ReportLab) + subida a
       Alibaba Cloud OSS, con enlace firmado (caduca en 1h) descargado desde el móvil.
 - [x] **M4** — **Probado en un móvil real.** PWA instalable (React + Vite +
-      Tailwind): login por magic-link de Supabase, botón de grabación, subida del
+      Tailwind): login por código de acceso al email (o contraseña), botón de grabación, subida del
       audio al mismo pipeline, lista de registros de hoy y descarga del PDF bajo
       demanda.
 - [ ] M5 — máquina de estados + confirmación de ejecución + clima AEMET ·
@@ -33,7 +33,7 @@ de empezar el siguiente.
 ## Stack
 
 **Backend**: Python 3.12 · FastAPI + Uvicorn · Pydantic V2 · Supabase
-(PostgreSQL + Auth magic-link) · Qwen-Audio + Qwen Instruct vía DashScope ·
+(PostgreSQL + Auth por código OTP al email / contraseña) · Qwen-Audio + Qwen Instruct vía DashScope ·
 Alibaba Cloud OSS · ReportLab. Dependencias con `uv`.
 
 **PWA (M4)**: React 19 + Vite + Tailwind + vite-plugin-pwa. Dependencias con `npm`.
@@ -121,7 +121,8 @@ túnel HTTPS, no `http://localhost`:
 cloudflared tunnel --url http://localhost:5173
 ```
 Abre en el móvil la URL `https://…trycloudflare.com` que imprime, inicia sesión
-con el magic-link, graba una nota y aparecerá en la lista de hoy.
+con el código que llega al email (o con contraseña), graba una nota y aparecerá
+en la lista de hoy.
 
 ## Apagado seguro
 

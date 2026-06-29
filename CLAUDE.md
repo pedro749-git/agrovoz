@@ -91,8 +91,9 @@ docs/            mvp_asesor_gip_v3.md · decisions.md · historico/ (M1 spike)
 ## Stack
 
 - Python 3.12 + FastAPI + Uvicorn. Pydantic V2 (optionals MUST have `= None`).
-- Supabase (PostgreSQL + magic-link Auth; verify JWT via asymmetric signing
-  keys / JWKS endpoint from M4 — not the legacy shared HS256 secret).
+- Supabase (PostgreSQL + Auth by email OTP code / password — magic link dropped
+  for iPhone PWA compat; verify JWT via asymmetric signing keys / JWKS endpoint
+  from M4 — not the legacy shared HS256 secret).
 - Qwen-Audio (speech→text) + Qwen Instruct (text→JSON) via DashScope.
 - Alibaba Cloud OSS (audio + PDFs), ReportLab (PDFs), AEMET OpenData (weather).
 - Deployment target: Alibaba Cloud ECS (hackathon requirement).

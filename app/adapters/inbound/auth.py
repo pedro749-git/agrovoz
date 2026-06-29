@@ -1,7 +1,7 @@
 """Inbound HTTP auth: verify the Supabase JWT and resolve the advisor (M4).
 
-The PWA logs in with a Supabase magic link and sends the resulting access token
-as ``Authorization: Bearer <jwt>``. Supabase signs it with an asymmetric key
+The PWA logs in with a Supabase email OTP code (or password) and sends the
+resulting access token as ``Authorization: Bearer <jwt>``. Supabase signs it with an asymmetric key
 (ES256), so we verify the signature against the project's PUBLIC keys, published
 at the JWKS endpoint — never the legacy shared HS256 secret (CLAUDE.md). No
 secret lives here: verification uses public keys only.

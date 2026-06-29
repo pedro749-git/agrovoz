@@ -140,7 +140,7 @@ gip-advisor/
 └── docs/          mvp_asesor_gip_v3.1.md · decisions.md
 ```
 
-Stack sin cambios: FastAPI + Pydantic V2 · Supabase (PostgreSQL + magic link) ·
+Stack sin cambios: FastAPI + Pydantic V2 · Supabase (PostgreSQL + código OTP al email / contraseña) ·
 Qwen-Audio + Qwen Instruct (DashScope) · Alibaba OSS · AEMET OpenData ·
 ReportLab · React PWA · despliegue en Alibaba ECS. Variables de entorno: las
 de v2.
@@ -612,7 +612,7 @@ máximo legal de 1.5 L/ha"}` — código en inglés, mensaje en español.
 
 ## 8. PWA — 5 pantallas (UI en español)
 
-**1 · Login.jsx** — magic link Supabase.
+**1 · Login.jsx** — Supabase: código OTP al email (principal) o contraseña (secundario; se fija en Ajustes). Sin magic link (compat PWA iPhone).
 
 **2 · Home.jsx** — un solo botón GRABAR (el LLM clasifica); lista del día con
 estados (👁️ observación · 📋 prescrita · ✅ ejecutada · ⛔ error) y bloque
@@ -661,7 +661,7 @@ prescripción · observaciones como seguro documental del asesor · validación
 de campaña con UNIQUE(holding, campaign, type) · ejecución directa permitida ·
 idempotencia por `transaction_id` · timestamp del dispositivo · cadena
 advisors→holdings→plots · operator siempre registrado · area ≤ enclosure ·
-soft-deletes · UTC en BD, Europe/Madrid en PDF · magic link · AEMET por GPS
+soft-deletes · UTC en BD, Europe/Madrid en PDF · código OTP al email / contraseña · AEMET por GPS
 con fallback a centroide y WEATHER_PENDING · Pydantic V2 con `= None`.
 
 **Convención de idiomas (nueva en v3.1):** código/BD/commits en inglés;

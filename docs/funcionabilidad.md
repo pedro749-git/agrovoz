@@ -18,11 +18,13 @@ PASO 3 — TÚ creas su explotación, parcelas y maquinaria
 └── INSERT de cada máquina en equipment (num_roma + equipment_alias)
     (El técnico nunca teclea esto. Tú lo configuras.)
 
-PASO 4 — EL TÉCNICO se registra en la PWA  →  PANTALLA 1 (LOGIN)
+PASO 4 — EL TÉCNICO inicia sesión en la PWA  →  PANTALLA 1 (LOGIN)
+(No hay autorregistro: tú le das de alta en auth.users; el login usa
+ shouldCreateUser:false, así que solo entran emails ya registrados.)
 ├── Abre la PWA, mete su email
-├── Supabase le manda un magic link
-├── Click en el link → entra → se crea su registro en auth.users
-└── Ahora tiene un auth_user_id, pero aún no está vinculado a su perfil
+├── Supabase le manda un código de acceso (6 dígitos) al email
+├── Introduce el código → entra con su auth_user_id ya existente
+└── Tiene un auth_user_id, pero aún no está vinculado a su perfil
 
 PASO 5 — VINCULAR las dos capas (automático)
 ├── El backend busca su perfil por email
@@ -33,10 +35,11 @@ PASO 5 — VINCULAR las dos capas (automático)
 ├── Si tiene sesión guardada → entra directo a HOME (Pantalla 2)
 └── Si no tiene sesión:
     ├── Mete su email
-    ├── Recibe magic link de Supabase
-    ├── Click → entra
+    ├── Recibe un código de acceso de Supabase
+    ├── Introduce el código → entra
     └── La sesión persiste para futuras aperturas
-El técnico nunca gestiona una contraseña. Solo su email.
+Método principal: código al email (el "usuario" es el email). Opcionalmente el
+técnico puede fijar una contraseña en Ajustes y entrar con email + contraseña.
 3. REGISTRAR UNA INTERVENCIÓN (la función principal) → PANTALLA 2 (HOME)
 Esto es el 90% de lo que hace el usuario. La novedad clave de la nueva interfaz: el mismo botón sirve para los dos tipos de registro de campo, y el sistema decide cuál es según el contenido del audio.
 ESTANDO EN EL CAMPO:
@@ -200,7 +203,7 @@ USUARIO (Técnico / Asesor GIP)
 │   └── Semi-manual: tú validas ROPO + creas perfil/parcelas, él conecta email
 │
 ├── ACCESO  →  Pantalla 1
-│   └── Magic link sin contraseña, sesión persistente
+│   └── Código al email (o contraseña opcional fijada en Ajustes), sesión persistente
 │
 ├── REGISTRAR INTERVENCIÓN  ←  función principal  →  Pantalla 2
 │   ├── 👁 Observación (vigilancia, sin producto, sin PDF)

@@ -3,6 +3,29 @@
 One line per decision (taken AND discarded): what · why · date.
 This file becomes the thesis' design chapter.
 
+## 2026-06-29 — M4: login by email OTP code + password (drop magic link)
+
+- REPLACED the magic-link login with an email **OTP code** (6 digits) as the
+  primary method · tapping a magic link from the iPhone mail app can open a
+  different browser than the one holding the installed PWA, so the session lands
+  in the wrong place and login appears to "do nothing". A code is read in the
+  mail app and typed/pasted into whichever browser already has the PWA open —
+  no cross-browser handoff · 2026-06-29
+- Code request uses `signInWithOtp({ shouldCreateUser: false })` · only advisors
+  already registered in Supabase may log in (the email must pre-exist); we never
+  create accounts from the login screen · 2026-06-29
+- Code is verified with `verifyOtp({ type: 'email' })` · same one-time token the
+  Magic Link email template carries; requires that template to include
+  `{{ .Token }}` in the Supabase dashboard (config step, not code) · 2026-06-29
+- ADDED password as a secondary login method (`signInWithPassword`, the "user"
+  is the email — no separate usernames) · field users who set a password skip
+  waiting for a code each shift · 2026-06-29
+- Password is set/changed from inside the app (Ajustes → `updateUser`), NOT via
+  a reset-password email · the user is already authenticated there, so it is a
+  single call · DISCARDED the `resetPasswordForEmail` + PASSWORD_RECOVERY flow:
+  more screens and an extra round-trip for no gain once you can log in by code ·
+  2026-06-29
+
 ## 2026-06-25 — M4: fix mobile PDF download (cross-origin attachment → blob)
 
 - PWA now FETCHES the signed PDF into memory and serves it via a same-origin

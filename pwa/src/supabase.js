@@ -24,9 +24,8 @@ export const supabase = createClient(url, publishableKey, {
     // ...and silently renew the short-lived access token before it expires, so
     // the advisor is not kicked out mid-shift.
     autoRefreshToken: true,
-    // After the user clicks the magic link, Supabase returns to the app with
-    // the token in the URL; the SDK reads it, stores the session and cleans the
-    // address bar — all automatically.
-    detectSessionInUrl: true,
+    // We log in with an email OTP code (verifyOtp) and with passwords, so no
+    // token ever arrives via the URL; leave URL detection off.
+    detectSessionInUrl: false,
   },
 })
