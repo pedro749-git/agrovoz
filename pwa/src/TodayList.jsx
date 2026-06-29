@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { listInterventions, getPdfUrl } from './api.js'
+import { listInterventions, getPdfUrl, confirmExecution } from './api.js'
 
 // Downloads a record's prescription PDF in TWO steps, on purpose:
 //   1. Tap "Preparar" -> sign the URL on demand, then fetch the PDF into memory
@@ -87,6 +87,116 @@ const madridTime = new Intl.DateTimeFormat('es-ES', {
   minute: '2-digit',
 })
 
+// Compact weather line for an executed record. Skips any reading the provider
+// left empty, so a partial response still shows what it has. Returns '' when
+// there is nothing (e.g. a prescription, or weather still pending).
+function weatherSummary(r) {
+  const parts = []
+  if (r.temperature_c != null) parts.push(`🌡️ ${Math.round(r.temperature_c)} °C`)
+  if (r.relative_humidity_pct != null) parts.push(`💧 ${Math.round(r.relative_humidity_pct)} %`)
+  if (r.wind_speed_kmh != null) {
+    parts.push(`💨 ${Math.round(r.wind_speed_kmh)} km/h ${r.wind_direction ?? ''}`.trim())
+  }
+  return parts.join(' · ')
+}
+
+// Confirms a PRESCRIBED record as EXECUTED (FLUJO B). Collapsed it is a single
+// link; expanded it asks for the REAL application date — prefilled to today as
+// the device sees it (Europe/Madrid), editable because the treatment may have
+// been applied days earlier (hard rule 2) — plus the optional real dose and
+// treated area (the two figures the backend re-validates against the legal
+// caps). On success the parent swaps the row for the returned EXECUTED record.
+function ConfirmExecution({ interventionId, onConfirmed }) {
+  const [open, setOpen] = useState(false)
+  const [day, setDay] = useState(() => madridDay.format(new Date()))
+  const [dose, setDose] = useState('')
+  const [area, setArea] = useState('')
+  const [status, setStatus] = useState('idle') // idle | saving | error
+  const [error, setError] = useState('')
+
+  async function submit() {
+    setStatus('saving')
+    setError('')
+    try {
+      // Noon UTC: the calendar day the advisor picked stays the same day both in
+      // UTC (the backend's earliest_harvest = treatment_date.date()) and in
+      // Madrid, with no midnight roll when converting the date-only value.
+      const treatmentDate = new Date(`${day}T12:00:00Z`).toISOString()
+      const updated = await confirmExecution(interventionId, {
+        treatmentDate,
+        appliedDose: dose,
+        treatedAreaHa: area,
+      })
+      onConfirmed(updated)
+    } catch (err) {
+      setError(err.message)
+      setStatus('error')
+    }
+  }
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="mt-2 text-xs font-semibold text-moss underline"
+      >
+        ✅ Confirmar ejecución
+      </button>
+    )
+  }
+
+  const field = 'mt-1 w-full rounded-lg border border-line px-2 py-1 text-sm text-soil'
+  return (
+    <div className="mt-3 flex flex-col gap-2 border-t border-line pt-3">
+      <label className="text-xs font-semibold text-ink">
+        Fecha de aplicación
+        <input type="date" value={day} onChange={(e) => setDay(e.target.value)} className={field} />
+      </label>
+      <label className="text-xs font-semibold text-ink">
+        Dosis real (opcional)
+        <input
+          type="number"
+          inputMode="decimal"
+          value={dose}
+          onChange={(e) => setDose(e.target.value)}
+          placeholder="la prescrita"
+          className={field}
+        />
+      </label>
+      <label className="text-xs font-semibold text-ink">
+        Superficie tratada en ha (opcional)
+        <input
+          type="number"
+          inputMode="decimal"
+          value={area}
+          onChange={(e) => setArea(e.target.value)}
+          className={field}
+        />
+      </label>
+      {status === 'error' && <p className="text-xs text-terra">{error}</p>}
+      <div className="flex items-center gap-4">
+        <button
+          type="button"
+          onClick={submit}
+          disabled={status === 'saving'}
+          className="rounded-lg bg-moss px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50"
+        >
+          {status === 'saving' ? 'Confirmando…' : 'Confirmar'}
+        </button>
+        <button
+          type="button"
+          onClick={() => setOpen(false)}
+          disabled={status === 'saving'}
+          className="text-xs font-semibold text-ink underline"
+        >
+          Cancelar
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // The advisor's records made TODAY. Re-fetches whenever `refreshKey` changes
 // (the parent bumps it after a new recording is saved).
 function TodayList({ refreshKey }) {
@@ -166,6 +276,7 @@ function TodayList({ refreshKey }) {
           label: r.lifecycle_state,
           className: 'bg-ink',
         }
+        const weather = weatherSummary(r)
         return (
           <li key={r.id} className="rounded-xl border border-line bg-card p-4 shadow-sm">
             <div className="flex items-center justify-between">
@@ -194,10 +305,29 @@ function TodayList({ refreshKey }) {
                     Cosecha no antes de: {r.earliest_harvest_date}
                   </p>
                 )}
+                {/* Weather captured at execution; or a flag if it is still pending. */}
+                {weather ? (
+                  <p className="mt-1 text-xs text-ink">{weather}</p>
+                ) : (
+                  r.audit_state === 'WEATHER_PENDING' && (
+                    <p className="mt-1 text-xs text-terra">⛅ Clima pendiente</p>
+                  )
+                )}
               </div>
             )}
 
             {r.has_pdf && <PdfButton interventionId={r.id} />}
+
+            {/* A prescription can be confirmed as executed (FLUJO B). On success
+                swap just this row for the returned EXECUTED record — no refetch. */}
+            {r.lifecycle_state === 'PRESCRIBED' && (
+              <ConfirmExecution
+                interventionId={r.id}
+                onConfirmed={(updated) =>
+                  setRecords((rs) => rs.map((x) => (x.id === updated.id ? updated : x)))
+                }
+              />
+            )}
           </li>
         )
       })}

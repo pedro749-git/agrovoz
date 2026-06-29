@@ -64,6 +64,33 @@ export async function listInterventions() {
   return unwrap(response)
 }
 
+// PATCH /api/interventions/:id/execution — confirms a PRESCRIBED record as
+// EXECUTED with the real application data (FLUJO B). Only `treatmentDate` is
+// required: the PWA prefills it with the device date but it is editable, since
+// the treatment may have been applied days before it is confirmed (hard rule 2).
+// `appliedDose` / `treatedAreaHa` are sent only when the advisor types them; when
+// omitted the backend falls back to the prescribed dose / holding defaults and
+// re-validates legality with whatever real values arrive. Form-encoded to match
+// the backend endpoint (Form(...)), exactly like createRecord.
+export async function confirmExecution(
+  interventionId,
+  { treatmentDate, appliedDose, treatedAreaHa },
+) {
+  const form = new FormData()
+  form.append('treatment_date', treatmentDate)
+  if (appliedDose !== '' && appliedDose != null) form.append('applied_dose', appliedDose)
+  if (treatedAreaHa !== '' && treatedAreaHa != null) {
+    form.append('treated_area_ha', treatedAreaHa)
+  }
+
+  const response = await fetch(`/api/interventions/${interventionId}/execution`, {
+    method: 'PATCH',
+    headers: await authHeader(),
+    body: form,
+  })
+  return unwrap(response)
+}
+
 // GET /api/interventions/:id/pdf — signs the prescription PDF link on demand
 // (the list carries only has_pdf, never a per-row URL). Returns the presigned
 // URL, valid for a short while; the caller opens it.
