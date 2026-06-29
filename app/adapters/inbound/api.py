@@ -325,6 +325,13 @@ def _record_fields(intervention: Intervention) -> dict:
             if intervention.earliest_harvest_date
             else None
         ),
+        # Weather captured at execution (None until EXECUTED, or when deferred).
+        # audit_state lets the PWA flag a record whose weather is still pending.
+        "temperature_c": intervention.temperature_c,
+        "relative_humidity_pct": intervention.relative_humidity_pct,
+        "wind_speed_kmh": intervention.wind_speed_kmh,
+        "wind_direction": intervention.wind_direction,
+        "audit_state": intervention.audit_state,
         "has_pdf": intervention.prescription_pdf_key is not None,
     }
 

@@ -26,6 +26,70 @@ This file becomes the thesis' design chapter.
   validity period decided first, so it waits for M5 (no speculative code) ·
   2026-06-29
 
+## 2026-06-29 — M5 progress checkpoint (resume here)
+
+- DONE · step 1: FLUJO B backend (execution confirmation, PRESCRIBED -> EXECUTED)
+  end-to-end at the API level, with tests. Commits dd2c21d (calculations + state
+  gate) and 06082b5 (FLUJO B). Weather NOT captured yet.
+- DONE · step 2: PWA "✅ Confirmar ejecución" button on PRESCRIBED records,
+  verified on a real phone (see entry below).
+- DONE · step 3: weather via Open-Meteo, captured inside FLUJO B (see entry below).
+- TODO · step 4: `iteaf_warning` (needs the ITEAF inspection validity period
+  decided first) + lifecycle-state icons in the PWA list.
+- OPEN gap (unrelated): Supabase client has no explicit timeout (see note below).
+
+## 2026-06-29 — M5 step 3: weather via Open-Meteo (FLUJO B)
+
+- ADDED the `Weather` port (`core/ports/weather.py`) + `OpenMeteoWeather` adapter
+  · one method `conditions_at(lat, lon, day)` returning the existing `WeatherData`.
+  CHOSE Open-Meteo over AEMET · free, keyless, lat/lon direct; the *forecast*
+  endpoint with explicit `start_date`/`end_date` also serves the recent past
+  (~92 days), covering a deferred execution. AEMET stays pluggable behind the port
+  (one line in container.py). DISCARDED the archive endpoint for older dates · out
+  of MVP scope · 2026-06-29
+- DECIDED to read the HOURLY 12:00 (local) sample as representative of the day ·
+  the PWA captures only the application DATE, not the hour. Refinable later (real
+  hour, or daily aggregates for drift) in the adapter alone · 2026-06-29
+- KEPT `WeatherData` as the port's return shape while `Intervention` keeps the
+  four weather columns FLAT · the entity mirrors the flat legal-record table, the
+  value object is just transport; the service maps one onto the other, so the
+  adapter never learns how the record is persisted (asked: "isn't this modeled
+  weirdly / duplicated?" — answer: DTO-vs-entity overlap, on purpose) · 2026-06-29
+- BOUNDARY rule: the adapter catches `Exception` and wraps EVERYTHING (timeout,
+  HTTP status, malformed/missing JSON, unexpected shape) into `WeatherError`, so
+  the service handles one thing and rule 8 (never block) always holds. Capture is
+  best-effort in `ExecutionService._capture_weather`: no plot coordinates OR a
+  `WeatherError` -> `audit_state='WEATHER_PENDING'`, fields left empty, record
+  saved anyway; success -> 4 fields + `audit_state='VALID'`. Uses the plot
+  centroid (PWA sends no device GPS yet, so gps_lat/lon stay None) · 2026-06-29
+- 3 new tests (weather captured / provider failure defers / no-coords defers);
+  full suite 61 passed · 2026-06-29
+- SURFACED the weather: `_record_fields` (create + list responses) now also
+  returns `temperature_c/relative_humidity_pct/wind_speed_kmh/wind_direction` +
+  `audit_state` (additive, nothing else changes). The PWA list shows a compact
+  line (🌡️ °C · 💧 % · 💨 km/h dir) that skips any empty reading, or "⛅ Clima
+  pendiente" when `audit_state=WEATHER_PENDING`. Shows on EXECUTED rows; a
+  prescription has no weather yet. Verified on a real phone · 2026-06-29
+
+## 2026-06-29 — M5 step 2: PWA "Confirmar ejecución" button (FLUJO B)
+
+- ADDED `confirmExecution(id, {...})` in `pwa/src/api.js` · `PATCH
+  /api/interventions/:id/execution` with FormData (matches the backend `Form(...)`,
+  like createRecord). Only `treatment_date` is required; dose/area sent only when
+  typed (backend falls back to prescribed/holding values and re-validates).
+- ADDED a `ConfirmExecution` component in `TodayList.jsx` shown only on PRESCRIBED
+  rows · collapsed = a link, expanded = date (prefilled to today as the device
+  sees it in Europe/Madrid, EDITABLE because the treatment may predate the
+  confirmation — rule 2) + optional real dose + optional treated area (the two
+  figures the backend re-validates). DECIDED date-only via `<input type=date>`
+  sent as noon UTC · the picked calendar day then matches both in UTC
+  (earliest_harvest = treatment_date.date()) and in Madrid, no midnight roll;
+  legally the day is what matters (PHI in days, weather per day). On success the
+  row is swapped in place for the returned EXECUTED record (no refetch).
+- KNOWN limit: the Home list is today-only, so a deferred prescription from
+  another day isn't visible to confirm there yet — a later view will cover it.
+  Verified on a real phone · 2026-06-29
+
 ## 2026-06-29 — M5 step 1: FLUJO B backend (execution confirmation, no weather)
 
 - ADDED `ExecutionService.confirm` (FLUJO B) mirroring `RegistrationPipeline`: a

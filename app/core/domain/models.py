@@ -103,8 +103,14 @@ class Equipment:
 
 @dataclass
 class WeatherData:
-    """AEMET conditions captured when EXECUTION is confirmed (real
-    application date — historical data if deferred), never at prescription."""
+    """The Weather port's return shape: conditions captured when EXECUTION is
+    confirmed (real application date — historical data if deferred), never at
+    prescription (hard rule 8).
+
+    These same four fields live FLATTENED as columns on ``Intervention`` because
+    the legal record is a single flat row; this object is just the transport
+    value the port returns, which ``ExecutionService`` maps onto those columns —
+    so the weather adapter stays ignorant of how the record is persisted."""
 
     temperature_c: float | None = None
     relative_humidity_pct: float | None = None

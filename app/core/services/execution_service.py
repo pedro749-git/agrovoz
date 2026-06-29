@@ -10,22 +10,31 @@ in container.py. It RAISES typed domain errors and RETURNS the updated
 intervention; the inbound adapter decides how to surface that.
 """
 
+import logging
 from datetime import datetime
 from uuid import UUID
 
 from app.core.domain.calculations import earliest_harvest_date
-from app.core.domain.errors import InterventionNotFoundError, PlotNotFoundError
-from app.core.domain.models import Intervention
+from app.core.domain.errors import (
+    InterventionNotFoundError,
+    PlotNotFoundError,
+    WeatherError,
+)
+from app.core.domain.models import Intervention, Plot
 from app.core.domain.states import LifecycleState, transition
 from app.core.ports.repository import Repository
+from app.core.ports.weather import Weather
 from app.core.services.validation_service import validate_legality
+
+logger = logging.getLogger(__name__)
 
 
 class ExecutionService:
     """Confirms a prescription's execution (FLUJO B)."""
 
-    def __init__(self, repository: Repository) -> None:
+    def __init__(self, repository: Repository, weather: Weather) -> None:
         self._repo = repository
+        self._weather = weather
 
     async def confirm(
         self,
@@ -107,4 +116,37 @@ class ExecutionService:
             product.pre_harvest_interval_days if product else None,
         )
 
+        # Weather at the plot on the REAL application day (rule 8). Best-effort:
+        # sets audit_state to VALID or WEATHER_PENDING, never raises, never blocks.
+        await self._capture_weather(intervention, plot)
+
         return await self._repo.update_intervention(intervention)
+
+    async def _capture_weather(self, intervention: Intervention, plot: Plot) -> None:
+        """Capture the plot's conditions on the real application day (rule 8).
+
+        Best-effort: weather is a good practice, not a legal blocker. If the plot
+        has no coordinates or the provider fails, mark WEATHER_PENDING and leave
+        the weather fields empty — the record still saves and the gap is auditable
+        (a later backfill can fill it). Uses the plot centroid; the PWA does not
+        send device GPS yet, so gps_lat/gps_lon stay None.
+        """
+        if plot.lat is None or plot.lon is None:
+            intervention.audit_state = "WEATHER_PENDING"
+            logger.warning("Plot %s has no coordinates; weather deferred", plot.id)
+            return
+        try:
+            conditions = await self._weather.conditions_at(
+                lat=plot.lat, lon=plot.lon, day=intervention.treatment_date.date()
+            )
+        except WeatherError:
+            intervention.audit_state = "WEATHER_PENDING"
+            logger.warning(
+                "Weather capture failed for plot %s; deferred", plot.id, exc_info=True
+            )
+            return
+        intervention.temperature_c = conditions.temperature_c
+        intervention.relative_humidity_pct = conditions.relative_humidity_pct
+        intervention.wind_speed_kmh = conditions.wind_speed_kmh
+        intervention.wind_direction = conditions.wind_direction
+        intervention.audit_state = "VALID"

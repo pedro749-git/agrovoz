@@ -5,6 +5,7 @@ that works). Swapping an adapter (e.g. a different LLM) is a one-line change her
 and nowhere else.
 """
 
+from app.adapters.outbound.open_meteo_weather import OpenMeteoWeather
 from app.adapters.outbound.oss_storage import OssStorage
 from app.adapters.outbound.qwen import QwenExtractor, QwenTranscriber
 from app.adapters.outbound.reportlab_pdf import ReportLabPdfGenerator
@@ -19,8 +20,9 @@ repository = SupabaseRepository()
 notifier = TelegramNotifier()
 pdf_generator = ReportLabPdfGenerator()
 storage = OssStorage()
+weather = OpenMeteoWeather()
 
 pipeline = RegistrationPipeline(
     transcriber, extractor, repository, pdf_generator, storage
 )
-execution_service = ExecutionService(repository)
+execution_service = ExecutionService(repository, weather)
