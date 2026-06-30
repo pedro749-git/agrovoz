@@ -313,6 +313,13 @@ function TodayList({ refreshKey }) {
                     <p className="mt-1 text-xs text-terra">⛅ Clima pendiente</p>
                   )
                 )}
+                {/* Non-blocking notice: the equipment's ITEAF inspection was
+                    expired (or unrecorded) on the treatment day. */}
+                {r.iteaf_warning && (
+                  <p className="mt-1 text-xs font-semibold text-terra">
+                    ⚠️ Inspección ITEAF caducada
+                  </p>
+                )}
               </div>
             )}
 

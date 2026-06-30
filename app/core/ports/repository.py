@@ -8,9 +8,12 @@ Contract notes:
   knows nothing about business rules.
 - Every query must filter ``deleted_at IS NULL`` (hard rule 1: legal
   records are soft-deleted, never removed).
-- Voice-alias lookups search across ALL the advisor's holdings
-  (plots/equipment JOIN holdings ON advisor_id); aliases are unique per
-  advisor by design.
+- Plot voice-alias lookup searches across ALL the advisor's holdings
+  (plots JOIN holdings ON advisor_id); plot aliases are unique per advisor.
+- Equipment voice-alias lookup is scoped to the HOLDING already resolved
+  from the dictated plot, NOT the advisor: two holdings may each have a
+  "tractor", and the dictated plot pins which one. Equipment aliases are
+  unique per holding (DB partial unique index), not per advisor.
 """
 
 from abc import ABC, abstractmethod
@@ -88,8 +91,17 @@ class Repository(ABC):
 
     @abstractmethod
     async def get_equipment_by_alias(
-        self, advisor_id: UUID, equipment_alias: str
-    ) -> Equipment | None: ...
+        self, holding_id: UUID, equipment_alias: str
+    ) -> Equipment | None:
+        """Resolve the dictated equipment alias WITHIN one holding (the one the
+        plot belongs to). Scoping to the holding — not the advisor — lets two
+        holdings each keep a "tractor" without colliding."""
+
+    @abstractmethod
+    async def get_equipment(self, equipment_id: UUID) -> Equipment | None:
+        """A single equipment BY id — FLUJO B (M5) reads its
+        ``iteaf_inspection_date`` to flag an expired inspection (rule: ITEAF is
+        mandatory and periodic). Filters ``deleted_at IS NULL`` like every read."""
 
     @abstractmethod
     async def save_intervention(self, intervention: Intervention) -> Intervention:

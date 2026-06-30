@@ -3,6 +3,50 @@
 One line per decision (taken AND discarded): what · why · date.
 This file becomes the thesis' design chapter.
 
+## 2026-06-30 — Plot alias uniqueness left to the admin (known gap)
+
+- SAME collision class as the equipment alias bug, but NOT fixable the same way:
+  the plot is the FIRST thing resolved from the audio, so there is no parent
+  context to scope its lookup by (it is the plot that determines the holding).
+  Two plots with the same alias across an advisor's holdings is therefore
+  genuinely ambiguous by voice (the advisor dictates only the alias), so the
+  only lever is uniqueness PER ADVISOR — which is already a documented design
+  assumption, but the DB does not enforce it.
+- DISCARDED enforcing it now: `plots` has no advisor_id column (it hangs off the
+  holding), so a per-advisor unique rule needs a trigger or a denormalized
+  advisor_id — more machinery than warranted while a SINGLE admin creates plots
+  by hand (alta manual). KEPT as admin discipline + a detection query the admin
+  can run periodically to catch duplicates before they bite:
+    SELECT h.advisor_id, lower(p.voice_alias) AS alias, count(*)
+    FROM plots p JOIN holdings h ON h.id = p.holding_id
+    WHERE p.deleted_at IS NULL
+    GROUP BY h.advisor_id, lower(p.voice_alias) HAVING count(*) > 1;
+  REVISIT if there are ever multiple admins or automated plot creation.
+
+## 2026-06-30 — Equipment alias resolved per holding, not per advisor
+
+- BUG found: an advisor with two holdings, each owning a "tractor", got "no
+  encuentro el equipo «tractor»" — the voice lookup scoped equipment to the
+  ADVISOR (all holdings, JOIN holdings ON advisor_id), so the two identical
+  aliases tied and best_match refused to guess (ambiguity guard). FIXED by
+  scoping the lookup to the HOLDING already resolved from the dictated plot
+  (the plot is resolved one step earlier and carries holding_id), so the two
+  tractors never get compared. Drops the holdings JOIN -> a direct
+  `.eq("holding_id", ...)`, which also closes the earlier gap where the lookup
+  did not filter `holdings.deleted_at`.
+- DISCARDED a per-advisor UNIQUE on the alias (forbid two "tractor" anywhere):
+  it bans a legitimate, common case (a contractor advisor with N farms, each
+  with "its tractor") and equipment has no advisor_id column (would need a
+  trigger). Instead the alias is unique PER HOLDING via a partial unique index
+  `(holding_id, lower(equipment_alias)) WHERE deleted_at IS NULL` (migration
+  20260630120000) — lower() matches the fuzzy normalize, the WHERE respects
+  soft-delete (rule 1). So: same alias across holdings = allowed and resolved;
+  same alias within one holding = impossible by construction (the only truly
+  ambiguous case). Plot aliases stay unique per advisor (resolved first, no
+  parent context to scope by).
+- test_serialize_columns now concatenates ALL migration files (was reading just
+  the first via next(glob), which broke once a second migration existed).
+
 ## 2026-06-29 — Architecture: functional core for single-concept domain rules
 
 - KEPT the anemic-dataclass + transaction-script-service style on purpose · the
@@ -34,9 +78,42 @@ This file becomes the thesis' design chapter.
 - DONE · step 2: PWA "✅ Confirmar ejecución" button on PRESCRIBED records,
   verified on a real phone (see entry below).
 - DONE · step 3: weather via Open-Meteo, captured inside FLUJO B (see entry below).
-- TODO · step 4: `iteaf_warning` (needs the ITEAF inspection validity period
-  decided first) + lifecycle-state icons in the PWA list.
+- DONE · step 4a: `iteaf_warning` computed on execution AND surfaced in the PWA
+  list ("⚠️ Inspección ITEAF caducada"); exposed via the API projection.
+- TODO · step 4b: lifecycle-state icons in the PWA list — DEFERRED. It is
+  cosmetic (the state already shows as a coloured badge). Folded into the
+  planned PWA refactor below instead of done piecemeal now.
+- NEXT (between M5 and M6, NOT inside M5): PWA refactor toward the prototype
+  (`docs/agrovoz_prototipo.html`) — introduce React Router (today navigation is
+  ad-hoc `useState` in App.jsx, fine for 2 screens, doesn't scale to Home +
+  Historial + detail) and a list->detail pattern so the execution data (weather,
+  earliest harvest, ITEAF) lives on a detail screen instead of fattening each
+  list row. Incremental: Home + Historial + ONE detail screen, NOT the 11
+  prototype screens. NEVER build screens without a backend (map, plot alta,
+  campaign validation = M6/M7). The prototype is a visual MAP, not a contract —
+  its Login still shows the dropped magic link.
 - OPEN gap (unrelated): Supabase client has no explicit timeout (see note below).
+
+## 2026-06-30 — M5 step 4a: iteaf_warning on execution
+
+- DECIDED the ITEAF inspection validity = 3 years, in `settings`
+  (`iteaf_validity_years`), not hard-coded in the domain · RD 1702/2011 set it
+  at 5 years originally and 3 years for equipment in professional use since
+  2020-01-01; a settings value documents it as a normative parameter that can
+  shift again without touching domain code. DISCARDED 5 years (pre-2020, no
+  longer current) and a fixed domain constant (would bury a legal number in a
+  pure function). The value is injected into `ExecutionService` via the
+  container, so the service stays free of a `settings` import (hexagonal).
+- ADDED pure `iteaf_inspection_expired(treatment_date, inspection_date,
+  validity_years)` in `calculations.py` — the slot its docstring had reserved.
+  A MISSING inspection date counts as a warning (True): an unrecorded inspection
+  cannot prove the machine is in-date. Leap-day guard (Feb 29 -> Feb 28 in a
+  non-leap expiry year).
+- ADDED `Repository.get_equipment(equipment_id)` (only `get_equipment_by_alias`
+  existed) · FLUJO B needs to load the machine by id to read its inspection date.
+  `ExecutionService` sets `iteaf_warning` only when an equipment is linked (an
+  OBSERVATION has none); it is a NON-BLOCKING notice, never a block (rule 8
+  spirit). No DB migration: both columns already existed in the initial schema.
 
 ## 2026-06-29 — M5 step 3: weather via Open-Meteo (FLUJO B)
 

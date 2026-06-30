@@ -332,6 +332,9 @@ def _record_fields(intervention: Intervention) -> dict:
         "wind_speed_kmh": intervention.wind_speed_kmh,
         "wind_direction": intervention.wind_direction,
         "audit_state": intervention.audit_state,
+        # ITEAF inspection expired/unrecorded on the treatment day: a
+        # non-blocking notice the PWA surfaces on executed records.
+        "iteaf_warning": intervention.iteaf_warning,
         "has_pdf": intervention.prescription_pdf_key is not None,
     }
 

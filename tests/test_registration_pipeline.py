@@ -70,8 +70,8 @@ class FakeRepo:
                        max_allowed_dose=1.5, dose_unit="L/ha",
                        pre_harvest_interval_days=14)
 
-    async def get_equipment_by_alias(self, advisor_id, alias):
-        return Equipment(holding_id=HOLD, equipment_alias=alias, id=EQ)
+    async def get_equipment_by_alias(self, holding_id, alias):
+        return Equipment(holding_id=holding_id, equipment_alias=alias, id=EQ)
 
     async def get_holding(self, holding_id):
         return Holding(advisor_id=ADV, owner_name="Pepe", owner_nif="1",

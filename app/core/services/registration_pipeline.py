@@ -96,8 +96,10 @@ class RegistrationPipeline:
                 raise ProductError(
                     f"No encuentro el producto «{fields.product_name}» en el vademécum."
                 )
+            # Scoped to the plot's holding, not the advisor: the dictated plot
+            # already pins the holding, so two holdings' "tractor" don't collide.
             equipment = await self._repo.get_equipment_by_alias(
-                advisor_id, fields.equipment_alias
+                plot.holding_id, fields.equipment_alias
             )
             if equipment is None:
                 raise EquipmentNotFoundError(

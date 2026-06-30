@@ -14,7 +14,10 @@ import logging
 from datetime import datetime
 from uuid import UUID
 
-from app.core.domain.calculations import earliest_harvest_date
+from app.core.domain.calculations import (
+    earliest_harvest_date,
+    iteaf_inspection_expired,
+)
 from app.core.domain.errors import (
     InterventionNotFoundError,
     PlotNotFoundError,
@@ -32,9 +35,13 @@ logger = logging.getLogger(__name__)
 class ExecutionService:
     """Confirms a prescription's execution (FLUJO B)."""
 
-    def __init__(self, repository: Repository, weather: Weather) -> None:
+    def __init__(
+        self, repository: Repository, weather: Weather, iteaf_validity_years: int
+    ) -> None:
         self._repo = repository
         self._weather = weather
+        # Years an ITEAF inspection stays valid (from settings; see rule below).
+        self._iteaf_validity_years = iteaf_validity_years
 
     async def confirm(
         self,
@@ -115,6 +122,17 @@ class ExecutionService:
             treatment_date,
             product.pre_harvest_interval_days if product else None,
         )
+
+        # ITEAF warning: is the machine's inspection still valid on the REAL
+        # treatment day? Only checkable when an equipment is linked (an
+        # OBSERVATION has none). A non-blocking notice (rule 8 spirit).
+        if intervention.equipment_id is not None:
+            equipment = await self._repo.get_equipment(intervention.equipment_id)
+            intervention.iteaf_warning = iteaf_inspection_expired(
+                treatment_date,
+                equipment.iteaf_inspection_date if equipment else None,
+                self._iteaf_validity_years,
+            )
 
         # Weather at the plot on the REAL application day (rule 8). Best-effort:
         # sets audit_state to VALID or WEATHER_PENDING, never raises, never blocks.

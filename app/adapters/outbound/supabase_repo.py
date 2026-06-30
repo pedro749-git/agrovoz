@@ -261,17 +261,30 @@ class SupabaseRepository(Repository):
         return _deserialize(Product, res.data[0]) if res.data else None
 
     async def get_equipment_by_alias(
-        self, advisor_id: UUID, equipment_alias: str
+        self, holding_id: UUID, equipment_alias: str
     ) -> Equipment | None:
+        # Scoped to the holding (resolved from the dictated plot), so two
+        # holdings can each have a "tractor" without the fuzzy match seeing both.
         client = await get_client()
         res = await _run(
             client.table("equipment")
-            .select("*, holdings!inner(advisor_id)")
-            .eq("holdings.advisor_id", str(advisor_id))
+            .select("*")
+            .eq("holding_id", str(holding_id))
             .is_("deleted_at", "null")
         )
         row = best_match(equipment_alias, res.data, "equipment_alias")
         return _deserialize(Equipment, row) if row else None
+
+    async def get_equipment(self, equipment_id: UUID) -> Equipment | None:
+        client = await get_client()
+        res = await _run(
+            client.table("equipment")
+            .select("*")
+            .eq("id", str(equipment_id))
+            .is_("deleted_at", "null")
+            .limit(1)
+        )
+        return _deserialize(Equipment, res.data[0]) if res.data else None
 
     async def save_intervention(self, intervention: Intervention) -> Intervention:
         client = await get_client()

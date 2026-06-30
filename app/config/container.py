@@ -11,6 +11,7 @@ from app.adapters.outbound.qwen import QwenExtractor, QwenTranscriber
 from app.adapters.outbound.reportlab_pdf import ReportLabPdfGenerator
 from app.adapters.outbound.supabase_repo import SupabaseRepository
 from app.adapters.outbound.telegram import TelegramNotifier
+from app.config.settings import settings
 from app.core.services.execution_service import ExecutionService
 from app.core.services.registration_pipeline import RegistrationPipeline
 
@@ -25,4 +26,6 @@ weather = OpenMeteoWeather()
 pipeline = RegistrationPipeline(
     transcriber, extractor, repository, pdf_generator, storage
 )
-execution_service = ExecutionService(repository, weather)
+execution_service = ExecutionService(
+    repository, weather, settings.iteaf_validity_years
+)

@@ -19,12 +19,19 @@ from app.core.domain.errors import (
     StateTransitionError,
     WeatherError,
 )
-from app.core.domain.models import Holding, Intervention, Plot, Product, WeatherData
+from app.core.domain.models import (
+    Equipment,
+    Holding,
+    Intervention,
+    Plot,
+    Product,
+    WeatherData,
+)
 from app.core.domain.states import LifecycleState
 from app.core.services.execution_service import ExecutionService
 
 ADV = UUID("11111111-1111-1111-1111-111111111111")
-HOLD, PLOT, IVID = uuid4(), uuid4(), uuid4()
+HOLD, PLOT, IVID, EQUIP = uuid4(), uuid4(), uuid4(), uuid4()
 PRESCRIBED_AT = datetime(2026, 6, 1, 9, 0, tzinfo=timezone.utc)
 TREATED_AT = datetime(2026, 6, 15, 7, 30, tzinfo=timezone.utc)
 LAT, LON = 40.4168, -3.7038  # plot centroid (Madrid)
@@ -50,9 +57,16 @@ def _prescribed(**overrides) -> Intervention:
 class FakeRepo:
     """Only the methods ExecutionService.confirm touches."""
 
-    def __init__(self, intervention: Intervention | None, *, plot_coords: bool = True):
+    def __init__(
+        self,
+        intervention: Intervention | None,
+        *,
+        plot_coords: bool = True,
+        equipment: Equipment | None = None,
+    ):
         self._intervention = intervention
         self._plot_coords = plot_coords
+        self._equipment = equipment
         self.updated: Intervention | None = None
 
     async def get_intervention(self, intervention_id, advisor_id):
@@ -82,6 +96,9 @@ class FakeRepo:
             dose_unit="L/ha", pre_harvest_interval_days=14,
         )
 
+    async def get_equipment(self, equipment_id):
+        return self._equipment
+
     async def update_intervention(self, intervention):
         self.updated = intervention
         return intervention
@@ -102,9 +119,16 @@ class FakeWeather:
         return self._result
 
 
-def _confirm(repo, *, weather=None, **kwargs):
+def _equipment(inspection_date) -> Equipment:
+    return Equipment(
+        holding_id=HOLD, equipment_alias="tractor",
+        iteaf_inspection_date=inspection_date, id=EQUIP,
+    )
+
+
+def _confirm(repo, *, weather=None, iteaf_validity_years=3, **kwargs):
     weather = weather or FakeWeather(WeatherData(22.0, 55.0, 8.0, "NW"))
-    service = ExecutionService(repo, weather)
+    service = ExecutionService(repo, weather, iteaf_validity_years)
     return asyncio.run(
         service.confirm(
             intervention_id=IVID, advisor_id=ADV, treatment_date=TREATED_AT, **kwargs
@@ -209,3 +233,37 @@ def test_confirm_defers_weather_when_plot_has_no_coordinates():
     assert weather.called_with is None  # provider never queried
     assert result.audit_state == "WEATHER_PENDING"
     assert result.temperature_c is None
+
+
+def test_confirm_flags_iteaf_warning_when_inspection_expired():
+    # Inspected 2023-01-10, validity 3y -> expires 2026-01-10, before the
+    # 2026-06-15 treatment -> warning.
+    repo = FakeRepo(
+        _prescribed(equipment_id=EQUIP), equipment=_equipment(date(2023, 1, 10))
+    )
+    result = _confirm(repo)
+    assert result.iteaf_warning is True
+
+
+def test_confirm_no_iteaf_warning_when_inspection_current():
+    # Inspected 2025-03-01, validity 3y -> valid until 2028 -> no warning.
+    repo = FakeRepo(
+        _prescribed(equipment_id=EQUIP), equipment=_equipment(date(2025, 3, 1))
+    )
+    result = _confirm(repo)
+    assert result.iteaf_warning is False
+
+
+def test_confirm_flags_iteaf_warning_when_inspection_unrecorded():
+    # No inspection date on file -> cannot prove the machine is in-date -> warning.
+    repo = FakeRepo(_prescribed(equipment_id=EQUIP), equipment=_equipment(None))
+    result = _confirm(repo)
+    assert result.iteaf_warning is True
+
+
+def test_confirm_no_iteaf_check_without_equipment():
+    # No equipment linked (default _prescribed) -> the flag stays False, the
+    # repo is never asked for equipment.
+    repo = FakeRepo(_prescribed())
+    result = _confirm(repo)
+    assert result.iteaf_warning is False

@@ -27,8 +27,11 @@ from app.core.domain.models import (
 from app.core.domain.states import LifecycleState
 
 ROOT = Path(__file__).resolve().parents[1]
-MIGRATION = next((ROOT / "supabase" / "migrations").glob("*.sql"))
-_SQL = MIGRATION.read_text()
+# Concatenate ALL migrations (sorted): the schema lives in the first, later
+# ones add constraints/indexes — every CREATE TABLE must be in scope here.
+_SQL = "\n".join(
+    m.read_text() for m in sorted((ROOT / "supabase" / "migrations").glob("*.sql"))
+)
 
 # Table-level constraints, not columns: skip lines that start with these.
 _NOT_A_COLUMN = ("CHECK", "UNIQUE", "PRIMARY", "FOREIGN", "CONSTRAINT")

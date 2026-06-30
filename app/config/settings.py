@@ -31,6 +31,12 @@ class Settings(BaseSettings):
     # timeout so the worker thread dies and the error surfaces as a domain error.
     vendor_timeout_seconds: int = 30
 
+    # ITEAF inspection validity (years). An application equipment's inspection
+    # is legally valid for this many years (RD 1702/2011: 5 years originally,
+    # 3 years for equipment in professional use since 2020-01-01). Past it, the
+    # execution flags ``iteaf_warning`` (a non-blocking notice, never a block).
+    iteaf_validity_years: int = 3
+
     # Alibaba Cloud OSS
     oss_access_key_id: str = ""
     oss_access_key_secret: SecretStr = SecretStr("")
