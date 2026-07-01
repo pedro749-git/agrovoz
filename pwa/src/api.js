@@ -68,25 +68,45 @@ export async function listInterventions() {
 // EXECUTED with the real application data (FLUJO B). Only `treatmentDate` is
 // required: the PWA prefills it with the device date but it is editable, since
 // the treatment may have been applied days before it is confirmed (hard rule 2).
-// `appliedDose` / `treatedAreaHa` are sent only when the advisor types them; when
-// omitted the backend falls back to the prescribed dose / holding defaults and
+// The optional fields (appliedDose, treatedAreaHa, sprayVolumeLHa, operatorName,
+// operatorRopo) are sent only when the advisor types them; when omitted the
+// backend falls back to the prescribed dose / holding default operator and
 // re-validates legality with whatever real values arrive. Form-encoded to match
 // the backend endpoint (Form(...)), exactly like createRecord.
 export async function confirmExecution(
   interventionId,
-  { treatmentDate, appliedDose, treatedAreaHa },
+  { treatmentDate, appliedDose, treatedAreaHa, sprayVolumeLHa, operatorName, operatorRopo },
 ) {
   const form = new FormData()
   form.append('treatment_date', treatmentDate)
-  if (appliedDose !== '' && appliedDose != null) form.append('applied_dose', appliedDose)
-  if (treatedAreaHa !== '' && treatedAreaHa != null) {
-    form.append('treated_area_ha', treatedAreaHa)
+  // Optional fields: send only when the advisor typed one, so an empty box keeps
+  // the backend's fallback (prescribed dose / holding default operator).
+  const optional = {
+    applied_dose: appliedDose,
+    treated_area_ha: treatedAreaHa,
+    spray_volume_l_ha: sprayVolumeLHa,
+    operator_name: operatorName,
+    operator_ropo: operatorRopo,
+  }
+  for (const [key, value] of Object.entries(optional)) {
+    if (value !== '' && value != null) form.append(key, value)
   }
 
   const response = await fetch(`/api/interventions/${interventionId}/execution`, {
     method: 'PATCH',
     headers: await authHeader(),
     body: form,
+  })
+  return unwrap(response)
+}
+
+// GET /api/interventions/:id — one record in full for the detail screen
+// (richer than the list: justification, real applied data, raw transcription,
+// plus plot/holding/equipment context). Scoped to the advisor server-side, so an
+// unknown or foreign id comes back as a 404 whose `mensaje` we surface.
+export async function getIntervention(interventionId) {
+  const response = await fetch(`/api/interventions/${interventionId}`, {
+    headers: await authHeader(),
   })
   return unwrap(response)
 }

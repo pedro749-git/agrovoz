@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { listInterventions, getPdfUrl, confirmExecution } from './api.js'
 
 // Downloads a record's prescription PDF in TWO steps, on purpose:
@@ -103,14 +104,18 @@ function weatherSummary(r) {
 // Confirms a PRESCRIBED record as EXECUTED (FLUJO B). Collapsed it is a single
 // link; expanded it asks for the REAL application date — prefilled to today as
 // the device sees it (Europe/Madrid), editable because the treatment may have
-// been applied days earlier (hard rule 2) — plus the optional real dose and
-// treated area (the two figures the backend re-validates against the legal
-// caps). On success the parent swaps the row for the returned EXECUTED record.
+// been applied days earlier (hard rule 2) — plus the optional real figures the
+// record needs (dose and area, re-validated against the legal caps; spray
+// volume; and who applied). On success the parent swaps the row for the
+// returned EXECUTED record.
 function ConfirmExecution({ interventionId, onConfirmed }) {
   const [open, setOpen] = useState(false)
   const [day, setDay] = useState(() => madridDay.format(new Date()))
   const [dose, setDose] = useState('')
   const [area, setArea] = useState('')
+  const [spray, setSpray] = useState('')
+  const [operator, setOperator] = useState('')
+  const [operatorRopo, setOperatorRopo] = useState('')
   const [status, setStatus] = useState('idle') // idle | saving | error
   const [error, setError] = useState('')
 
@@ -126,6 +131,9 @@ function ConfirmExecution({ interventionId, onConfirmed }) {
         treatmentDate,
         appliedDose: dose,
         treatedAreaHa: area,
+        sprayVolumeLHa: spray,
+        operatorName: operator,
+        operatorRopo,
       })
       onConfirmed(updated)
     } catch (err) {
@@ -174,6 +182,35 @@ function ConfirmExecution({ interventionId, onConfirmed }) {
           className={field}
         />
       </label>
+      <label className="text-xs font-semibold text-ink">
+        Caldo en L/ha (opcional)
+        <input
+          type="number"
+          inputMode="decimal"
+          value={spray}
+          onChange={(e) => setSpray(e.target.value)}
+          className={field}
+        />
+      </label>
+      <label className="text-xs font-semibold text-ink">
+        Aplicador (opcional)
+        <input
+          type="text"
+          value={operator}
+          onChange={(e) => setOperator(e.target.value)}
+          placeholder="el titular por defecto"
+          className={field}
+        />
+      </label>
+      <label className="text-xs font-semibold text-ink">
+        ROPO del aplicador (opcional)
+        <input
+          type="text"
+          value={operatorRopo}
+          onChange={(e) => setOperatorRopo(e.target.value)}
+          className={field}
+        />
+      </label>
       {status === 'error' && <p className="text-xs text-terra">{error}</p>}
       <div className="flex items-center gap-4">
         <button
@@ -200,6 +237,7 @@ function ConfirmExecution({ interventionId, onConfirmed }) {
 // The advisor's records made TODAY. Re-fetches whenever `refreshKey` changes
 // (the parent bumps it after a new recording is saved).
 function TodayList({ refreshKey }) {
+  const navigate = useNavigate()
   const [records, setRecords] = useState([])
   // Starts at 'loading' so the first mount shows "Cargando…" without us having
   // to setState synchronously inside the effect.
@@ -279,6 +317,20 @@ function TodayList({ refreshKey }) {
         const weather = weatherSummary(r)
         return (
           <li key={r.id} className="rounded-xl border border-line bg-card p-4 shadow-sm">
+            {/* Tapping the summary opens the detail; the action buttons below
+                stay outside this region so they don't trigger navigation. */}
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={() => navigate(`/registro/${r.id}`)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  navigate(`/registro/${r.id}`)
+                }
+              }}
+              className="cursor-pointer"
+            >
             <div className="flex items-center justify-between">
               <span
                 className={`rounded-full px-2.5 py-0.5 text-xs font-bold text-white ${style.className}`}
@@ -322,6 +374,7 @@ function TodayList({ refreshKey }) {
                 )}
               </div>
             )}
+            </div>
 
             {r.has_pdf && <PdfButton interventionId={r.id} />}
 

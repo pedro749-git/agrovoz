@@ -3,6 +3,31 @@
 One line per decision (taken AND discarded): what · why · date.
 This file becomes the thesis' design chapter.
 
+## 2026-06-30 — PWA: router + record detail screen (bridge M5→M6)
+
+- ADDED React Router (was ad-hoc useState screen switching, fine for 2 screens,
+  doesn't scale). HashRouter, NOT BrowserRouter: the PWA is served as static
+  files with no SPA fallback, so reloading a deep link /registro/:id would 404;
+  the hash keeps routing client-side. Switch to BrowserRouter once the host
+  rewrites unknown paths to index.html. Routes: "/" Home, "/registro/:id"
+  Detail, "/ajustes" Settings. Home is unchanged (record button + today list);
+  tapping a list row's summary navigates to the detail (the PDF / confirm
+  buttons stay outside the tappable region so they don't navigate).
+- ADDED GET /api/interventions/:id with a RICH projection (the list fields plus
+  prescription/execution detail + raw_transcription) AND plot/holding/equipment
+  context (crop, variety, area, SIGPAC, owner, ROMA). Three extra reads per
+  record, which is why the LIST stays lean and does not do them per row. Chose a
+  dedicated endpoint over reusing the list payload (too thin for a real detail
+  screen) — see the AskUserQuestion previews.
+- EXPOSED raw_transcription ("lo que dictaste") only on the detail, not the list.
+  The original AUDIO is still NOT shown: audio_storage_key exists on the model
+  but the pipeline never uploads the audio — deferred to its own slice.
+- Detail screen is READ-ONLY this slice: the PDF download and "confirmar
+  ejecución" actions stay in the list for now; moving them onto the detail (as
+  in the prototype) is the next slice. Lifecycle-state ICONS now live on the
+  detail hero, so the earlier step-4b "icons in the list" item is effectively
+  superseded by the list→detail split.
+
 ## 2026-06-30 — Plot alias uniqueness left to the admin (known gap)
 
 - SAME collision class as the equipment alias bug, but NOT fixable the same way:

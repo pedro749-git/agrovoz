@@ -13,7 +13,7 @@ from app.adapters.inbound import api
 from app.adapters.inbound.auth import current_advisor_id
 from app.config import container
 from app.core.domain.errors import DoseError, PlotNotFoundError, TranscriptionError
-from app.core.domain.models import Intervention
+from app.core.domain.models import Equipment, Holding, Intervention, Plot
 from app.core.domain.states import LifecycleState
 
 ADV = uuid4()
@@ -96,6 +96,56 @@ def test_list_interventions_200(client, monkeypatch):
     monkeypatch.setattr(container.repository, "list_interventions", fake_list)
     r = client.get("/api/interventions")
     assert r.status_code == 200 and len(r.json()) == 2
+
+
+def test_get_intervention_detail_200(client, monkeypatch):
+    iv = _intervention(LifecycleState.EXECUTED)
+    iv.equipment_id = uuid4()
+    iv.raw_transcription = "Finca de Pepe, abamectina, araña roja, tractor"
+    iv.justification = "Superación de umbral"
+
+    async def fake_get(intervention_id, advisor_id):
+        assert intervention_id == iv.id and advisor_id == ADV
+        return iv
+
+    async def fake_plot(plot_id):
+        return Plot(
+            holding_id=iv.holding_id, voice_alias="Finca de Pepe", crop="Limonero",
+            variety="Fino", enclosure_area_ha=3.5, sigpac_province="30",
+            sigpac_municipality="015", sigpac_polygon="012", sigpac_parcel="00045",
+            sigpac_enclosure="003", id=iv.plot_id)
+
+    async def fake_holding(holding_id):
+        return Holding(advisor_id=ADV, owner_name="José Ruiz", owner_nif="1",
+                       rea_regepa_number="REA-30-00123", id=iv.holding_id)
+
+    async def fake_equipment(equipment_id):
+        return Equipment(holding_id=iv.holding_id, equipment_alias="tractor",
+                         roma_number="ROMA-30-00077", id=equipment_id)
+
+    monkeypatch.setattr(container.repository, "get_intervention", fake_get)
+    monkeypatch.setattr(container.repository, "get_plot", fake_plot)
+    monkeypatch.setattr(container.repository, "get_holding", fake_holding)
+    monkeypatch.setattr(container.repository, "get_equipment", fake_equipment)
+
+    r = client.get(f"/api/interventions/{iv.id}")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["raw_transcription"].startswith("Finca de Pepe")
+    assert body["justification"] == "Superación de umbral"
+    assert body["plot"]["crop"] == "Limonero"
+    assert body["plot"]["sigpac"] == "30:015:012:00045:003"
+    assert body["holding"]["owner_name"] == "José Ruiz"
+    assert body["equipment"]["equipment_alias"] == "tractor"
+
+
+def test_get_intervention_detail_404(client, monkeypatch):
+    async def fake_get(intervention_id, advisor_id):
+        return None  # not yours / does not exist -> indistinguishable 404
+
+    monkeypatch.setattr(container.repository, "get_intervention", fake_get)
+    r = client.get(f"/api/interventions/{uuid4()}")
+    assert r.status_code == 404 and r.json()["error"] == "INTERVENTION_NOT_FOUND"
 
 
 def test_get_pdf_200(client, monkeypatch):

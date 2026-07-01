@@ -18,7 +18,7 @@ from app.adapters.outbound.telegram import download_voice
 from app.config import container
 from app.config.settings import settings
 from app.core.domain.errors import DomainError, InfrastructureError
-from app.core.domain.models import Intervention
+from app.core.domain.models import Equipment, Holding, Intervention, Plot
 from app.core.domain.states import LifecycleState
 
 logger = logging.getLogger(__name__)
@@ -155,6 +155,38 @@ async def list_interventions(
         advisor_id, state=state
     )
     return JSONResponse(content=[_record_fields(i) for i in interventions])
+
+
+@app.get("/api/interventions/{intervention_id}")
+async def get_intervention_detail(
+    intervention_id: UUID,
+    advisor_id: UUID = Depends(current_advisor_id),
+) -> JSONResponse:
+    """One intervention in full for the PWA detail screen.
+
+    Scoped to the authenticated advisor, so an unknown OR foreign id is an
+    indistinguishable 404 (you cannot probe what is not yours). Richer than the
+    list projection: it adds the prescription/execution detail and the raw
+    transcription, plus the plot/holding/equipment context the detail renders.
+    Three extra reads (plot, holding, equipment) are fine for a single record —
+    this is exactly why the list stays lean and does NOT do them per row.
+    """
+    intervention = await container.repository.get_intervention(
+        intervention_id, advisor_id
+    )
+    if intervention is None:
+        return _error(404, "INTERVENTION_NOT_FOUND", "No encuentro ese registro.")
+
+    plot = await container.repository.get_plot(intervention.plot_id)
+    holding = await container.repository.get_holding(intervention.holding_id)
+    equipment = (
+        await container.repository.get_equipment(intervention.equipment_id)
+        if intervention.equipment_id is not None
+        else None
+    )
+    return JSONResponse(
+        content=_intervention_detail(intervention, plot, holding, equipment)
+    )
 
 
 @app.get("/api/interventions/{intervention_id}/pdf")
@@ -337,6 +369,84 @@ def _record_fields(intervention: Intervention) -> dict:
         "iteaf_warning": intervention.iteaf_warning,
         "has_pdf": intervention.prescription_pdf_key is not None,
     }
+
+
+def _iso(value) -> str | None:
+    """ISO string for a date/datetime, or None. Both have .isoformat()."""
+    return value.isoformat() if value is not None else None
+
+
+def _intervention_detail(
+    intervention: Intervention,
+    plot: Plot | None,
+    holding: Holding | None,
+    equipment: Equipment | None,
+) -> dict:
+    """Full single-record projection for the detail screen: the list fields PLUS
+    the prescription/execution detail, the raw transcription ("lo que dictaste"),
+    and the plot/holding/equipment context. Still a projection — prompt_version
+    and storage keys stay internal. Nested context blocks are None when the
+    related row is missing (e.g. an OBSERVATION has no equipment)."""
+    data = _record_fields(intervention)
+    data.update(
+        {
+            # Prescription block.
+            "prescription_date": _iso(intervention.prescription_date),
+            "planned_date": _iso(intervention.planned_date),
+            "prescribed_dose": intervention.prescribed_dose,
+            "justification": intervention.justification,
+            "previous_alternatives": intervention.previous_alternatives,
+            # Execution block (the real applied data).
+            "treatment_date": _iso(intervention.treatment_date),
+            "applied_dose": intervention.applied_dose,
+            "treated_area_ha": intervention.treated_area_ha,
+            "spray_volume_l_ha": intervention.spray_volume_l_ha,
+            "operator_name": intervention.operator_name,
+            "operator_ropo": intervention.operator_ropo,
+            "delivery_note_number": intervention.delivery_note_number,
+            # What the advisor dictated (audio itself is not persisted yet).
+            "raw_transcription": intervention.raw_transcription,
+            # Context the detail renders (the where, the who, the with-what).
+            "plot": (
+                {
+                    "voice_alias": plot.voice_alias,
+                    "crop": plot.crop,
+                    "variety": plot.variety,
+                    "enclosure_area_ha": plot.enclosure_area_ha,
+                    "sigpac": ":".join(
+                        (
+                            plot.sigpac_province,
+                            plot.sigpac_municipality,
+                            plot.sigpac_polygon,
+                            plot.sigpac_parcel,
+                            plot.sigpac_enclosure,
+                        )
+                    ),
+                }
+                if plot
+                else None
+            ),
+            "holding": (
+                {
+                    "owner_name": holding.owner_name,
+                    "rea_regepa_number": holding.rea_regepa_number,
+                }
+                if holding
+                else None
+            ),
+            "equipment": (
+                {
+                    "equipment_alias": equipment.equipment_alias,
+                    "equipment_type": equipment.equipment_type,
+                    "roma_number": equipment.roma_number,
+                    "iteaf_inspection_date": _iso(equipment.iteaf_inspection_date),
+                }
+                if equipment
+                else None
+            ),
+        }
+    )
+    return data
 
 
 async def _record_response(intervention: Intervention) -> dict:
