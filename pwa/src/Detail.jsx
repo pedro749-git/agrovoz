@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { getIntervention } from './api.js'
-import { PdfButton, ConfirmExecution } from './RecordActions.jsx'
+import { AssessEffectiveness, ConfirmExecution, PdfButton } from './RecordActions.jsx'
 
 // Spanish label + icon + colour per lifecycle state (inspired by the prototype).
 const STATE = {
@@ -9,6 +9,13 @@ const STATE = {
   PRESCRIBED: { label: 'Prescripción', icon: '📄', className: 'bg-olive' },
   EXECUTED: { label: 'Ejecución', icon: '✓', className: 'bg-moss' },
   ASSESSED: { label: 'Evaluada', icon: '★', className: 'bg-amber' },
+}
+
+// English effectiveness value -> Spanish label + colour for the read-only block.
+const EFFECTIVENESS = {
+  GOOD: { label: 'Buena', className: 'bg-moss' },
+  FAIR: { label: 'Regular', className: 'bg-amber' },
+  POOR: { label: 'Mala', className: 'bg-terra' },
 }
 
 // Date-only strings (YYYY-MM-DD) are shown verbatim as DD/MM/YYYY — never parsed
@@ -183,8 +190,10 @@ function Detail() {
               </Section>
             )}
 
-            {/* EXECUTION */}
-            {r.lifecycle_state === 'EXECUTED' && (
+            {/* EXECUTION — shown for EXECUTED and for ASSESSED (which was
+                executed first and keeps all the applied data). */}
+            {(r.lifecycle_state === 'EXECUTED' ||
+              r.lifecycle_state === 'ASSESSED') && (
               <Section title="Aplicación real">
                 <KV k="Producto (nº MAPA)" v={r.product_registration_number} />
                 <KV
@@ -208,6 +217,28 @@ function Detail() {
                 />
                 <KV k="Nº albarán" v={r.delivery_note_number} />
                 <KV k="Cosecha desde" v={fmtDateOnly(r.earliest_harvest_date)} />
+              </Section>
+            )}
+
+            {/* ASSESSMENT (read-only) — how well it worked, when, and why. */}
+            {r.effectiveness && (
+              <Section title="Valoración del resultado">
+                <div className="flex items-center justify-between py-1">
+                  <span className="text-sm text-ink">Eficacia</span>
+                  <span
+                    className={`rounded-full px-2.5 py-0.5 text-xs font-bold text-white ${
+                      (EFFECTIVENESS[r.effectiveness] ?? {}).className ?? 'bg-ink'
+                    }`}
+                  >
+                    {(EFFECTIVENESS[r.effectiveness] ?? {}).label ?? r.effectiveness}
+                  </span>
+                </div>
+                <KV k="Valorada el" v={fmtDateOnly(r.effectiveness_date)} />
+                {r.effectiveness_notes && (
+                  <p className="mt-2 border-l-2 border-amber bg-bone px-3 py-2 text-sm italic text-soil">
+                    «{r.effectiveness_notes}»
+                  </p>
+                )}
               </Section>
             )}
 
@@ -252,6 +283,14 @@ function Detail() {
                   // Re-fetch the full detail so the promoted EXECUTED record keeps
                   // its rich context (the confirm response is the lean projection).
                   onConfirmed={() => setReloadKey((k) => k + 1)}
+                />
+              )}
+              {r.lifecycle_state === 'EXECUTED' && (
+                <AssessEffectiveness
+                  interventionId={r.id}
+                  // Same as the confirm: re-fetch so the ASSESSED record keeps its
+                  // rich context (the assess response is the lean projection).
+                  onAssessed={() => setReloadKey((k) => k + 1)}
                 />
               )}
             </div>

@@ -3,6 +3,25 @@
 One line per decision (taken AND discarded): what · why · date.
 This file becomes the thesis' design chapter.
 
+## 2026-07-02 — M6 PWA: effectiveness assessment UI + mic dictation
+
+- ADDED an AssessEffectiveness block on the detail of an EXECUTED record: three
+  rating buttons (Buena/Regular/Mala -> GOOD/FAIR/POOR), an editable date
+  (today by default), and an OPTIONAL reason. On save it PATCHes and the detail
+  RE-FETCHES (reloadKey), same pattern as the execution confirm — the assess
+  response is the lean list projection, so re-loading keeps the rich context.
+- The reason is DICTATED: a mic button records (mirrors Recorder — getUserMedia
+  + MediaRecorder), POST /api/transcribe turns it into text, and it lands in an
+  EDITABLE textarea the advisor reviews/corrects before saving. Multiple
+  dictations append. Chose transcribe-then-edit over transcribe-on-submit so
+  nothing reaches the legal record unseen.
+- ASSESSED detail now renders the full execution block PLUS a read-only
+  "Valoración del resultado" (effectiveness chip + date + reason). The execution
+  Section shows for EXECUTED *and* ASSESSED (an assessed record was executed
+  first and keeps all applied data).
+- ADDED the delivery-note number input to the execution confirm form (backend
+  already accepted it; it belongs to EXECUTION, not the assessment).
+
 ## 2026-07-02 — M6 backend: effectiveness assessment (FLUJO C, Phase 4)
 
 - ADDED EXECUTED -> ASSESSED via a new AssessmentService (mirrors

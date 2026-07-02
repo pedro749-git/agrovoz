@@ -32,10 +32,11 @@ de empezar el siguiente.
       revalidadas) + clima capturado en la fecha real vía Open-Meteo (con
       `WEATHER_PENDING` si falla) + aviso de caducidad de la inspección ITEAF +
       pantalla de detalle en la PWA (lista → detalle, con las acciones en el detalle).
-- [ ] **M6** — Evaluación de eficacia (Buena/Regular/Mala) + nº de albarán.
-      **Backend hecho**: EXECUTED → ASSESSED (`AssessmentService`), endpoint de
-      valoración y endpoint de solo-transcripción para dictar el motivo. Falta la
-      UI de valoración en la PWA.
+- [x] **M6** — Evaluación de eficacia (Buena/Regular/Mala) + fecha + motivo
+      dictado + nº de albarán. EXECUTED → ASSESSED (`AssessmentService`), endpoint
+      de valoración y endpoint de solo-transcripción; en la PWA, bloque de
+      valoración en el detalle con dictado por micrófono (transcribe → texto
+      editable) y vista de solo lectura del registro evaluado.
 - [ ] M7 — validaciones de campaña (PDF firmado).
 
 ## Stack

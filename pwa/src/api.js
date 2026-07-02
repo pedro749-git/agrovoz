@@ -69,13 +69,21 @@ export async function listInterventions() {
 // required: the PWA prefills it with the device date but it is editable, since
 // the treatment may have been applied days before it is confirmed (hard rule 2).
 // The optional fields (appliedDose, treatedAreaHa, sprayVolumeLHa, operatorName,
-// operatorRopo) are sent only when the advisor types them; when omitted the
+// operatorRopo, deliveryNoteNumber) are sent only when the advisor types them; when omitted the
 // backend falls back to the prescribed dose / holding default operator and
 // re-validates legality with whatever real values arrive. Form-encoded to match
 // the backend endpoint (Form(...)), exactly like createRecord.
 export async function confirmExecution(
   interventionId,
-  { treatmentDate, appliedDose, treatedAreaHa, sprayVolumeLHa, operatorName, operatorRopo },
+  {
+    treatmentDate,
+    appliedDose,
+    treatedAreaHa,
+    sprayVolumeLHa,
+    operatorName,
+    operatorRopo,
+    deliveryNoteNumber,
+  },
 ) {
   const form = new FormData()
   form.append('treatment_date', treatmentDate)
@@ -87,6 +95,7 @@ export async function confirmExecution(
     spray_volume_l_ha: sprayVolumeLHa,
     operator_name: operatorName,
     operator_ropo: operatorRopo,
+    delivery_note_number: deliveryNoteNumber,
   }
   for (const [key, value] of Object.entries(optional)) {
     if (value !== '' && value != null) form.append(key, value)
@@ -109,6 +118,47 @@ export async function getIntervention(interventionId) {
     headers: await authHeader(),
   })
   return unwrap(response)
+}
+
+// PATCH /api/interventions/:id/effectiveness — rate an executed treatment's
+// effectiveness (EXECUTED -> ASSESSED, FLUJO C). `effectiveness` is GOOD|FAIR|POOR
+// (the backend validates the enum); `effectivenessDate` is when the advisor
+// judged the result (a plain YYYY-MM-DD, prefilled to the device date but
+// editable — the assessment happens days after the treatment); `effectivenessNotes`
+// is the optional reason, sent only when present. Form-encoded like the others.
+export async function assessEffectiveness(
+  interventionId,
+  { effectiveness, effectivenessDate, effectivenessNotes },
+) {
+  const form = new FormData()
+  form.append('effectiveness', effectiveness)
+  form.append('effectiveness_date', effectivenessDate)
+  if (effectivenessNotes && effectivenessNotes.trim() !== '') {
+    form.append('effectiveness_notes', effectivenessNotes)
+  }
+
+  const response = await fetch(`/api/interventions/${interventionId}/effectiveness`, {
+    method: 'PATCH',
+    headers: await authHeader(),
+    body: form,
+  })
+  return unwrap(response)
+}
+
+// POST /api/transcribe — speech-to-text ONLY (no extraction, no persistence).
+// Used to dictate the assessment reason: returns the transcribed text so the PWA
+// can drop it into an editable box for the advisor to review before submitting.
+export async function transcribeAudio(audioBlob) {
+  const form = new FormData()
+  form.append('audio', audioBlob, 'note.webm')
+
+  const response = await fetch('/api/transcribe', {
+    method: 'POST',
+    headers: await authHeader(),
+    body: form,
+  })
+  const { text } = await unwrap(response)
+  return text
 }
 
 // GET /api/interventions/:id/pdf — signs the prescription PDF link on demand
