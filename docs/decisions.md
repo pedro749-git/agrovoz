@@ -3,6 +3,32 @@
 One line per decision (taken AND discarded): what · why · date.
 This file becomes the thesis' design chapter.
 
+## 2026-07-02 — M6 backend: effectiveness assessment (FLUJO C, Phase 4)
+
+- ADDED EXECUTED -> ASSESSED via a new AssessmentService (mirrors
+  ExecutionService): validates the state transition, stores effectiveness +
+  date + reason, persists. Effectiveness modelled as an `Effectiveness` StrEnum
+  (GOOD/FAIR/POOR, UI Buena/Regular/Mala) so PATCH /api/interventions/:id/
+  effectiveness rejects a bad value at the boundary (422) like the list's
+  `state` filter — never reaching the DB CHECK.
+- ADDED two columns (migration): `effectiveness_date` (WHEN assessed) and
+  `effectiveness_notes` (WHY, dictated). NOTE: neither is in the official Anexo
+  III checklist — accepted as GIP good-practice/UX fields at the user's request
+  (deliberate exception to "no speculative DB fields"). Blank notes normalise to
+  NULL, not "".
+- VOICE dictation split into its own POST /api/transcribe (speech->text ONLY,
+  no extraction, no persistence): the PWA transcribes the reason, shows it in an
+  EDITABLE textarea, then submits the reviewed text with the assessment. Chosen
+  over transcribing inside the PATCH so the advisor sees/corrects what Qwen
+  heard before it lands in the legal record; keeps AssessmentService pure (no
+  audio I/O) and reuses the existing Transcriber port.
+- The delivery-note number is NOT part of the assessment: it is captured at
+  EXECUTION (already backend-wired) — the assessment is only effectiveness.
+- Extended tests/test_serialize_columns to read `ALTER TABLE ... ADD COLUMN`,
+  not just CREATE TABLE, so later column-adding migrations stay covered.
+- PWA (assessment block + mic button) deferred to its own slice — kept this one
+  backend-only to stop the milestone sprawling.
+
 ## 2026-06-30 — PWA: actions moved from the list row onto the detail
 
 - MOVED PdfButton + ConfirmExecution out of TodayList into a shared

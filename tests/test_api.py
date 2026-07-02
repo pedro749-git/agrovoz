@@ -207,6 +207,48 @@ def test_get_pdf_404_when_no_pdf(client, monkeypatch):
     assert r.status_code == 404 and r.json()["error"] == "PDF_NOT_FOUND"
 
 
+def test_assess_effectiveness_200(client, monkeypatch):
+    iv = _intervention(LifecycleState.ASSESSED)
+    captured = {}
+
+    class FakeAssessment:
+        async def assess(self, **kwargs):
+            captured.update(kwargs)
+            return iv
+
+    monkeypatch.setattr(container, "assessment_service", FakeAssessment())
+    r = client.patch(
+        f"/api/interventions/{iv.id}/effectiveness",
+        data={"effectiveness": "GOOD", "effectiveness_date": "2026-06-29",
+              "effectiveness_notes": "La plaga remitió"})
+    assert r.status_code == 200, r.text
+    assert r.json()["lifecycle_state"] == "ASSESSED"
+    # The enum and date are parsed at the boundary before reaching the service.
+    assert captured["effectiveness"].value == "GOOD"
+    assert str(captured["effectiveness_date"]) == "2026-06-29"
+
+
+def test_assess_bad_effectiveness_422(client):
+    # An out-of-enum value is rejected by FastAPI validation before the service.
+    r = client.patch(
+        f"/api/interventions/{uuid4()}/effectiveness",
+        data={"effectiveness": "EXCELLENT", "effectiveness_date": "2026-06-29"})
+    assert r.status_code == 422
+
+
+def test_transcribe_200(client, monkeypatch):
+    class FakeTranscriber:
+        async def transcribe(self, audio):
+            assert audio == b"x"
+            return "la plaga ha remitido bastante"
+
+    monkeypatch.setattr(container, "transcriber", FakeTranscriber())
+    r = client.post("/api/transcribe",
+                    files={"audio": ("a.ogg", b"x", "audio/ogg")})
+    assert r.status_code == 200, r.text
+    assert r.json()["text"] == "la plaga ha remitido bastante"
+
+
 def test_post_without_token_401():
     # No dependency override -> the real auth dependency runs; no token -> 401.
     client = TestClient(api.app, raise_server_exceptions=False)

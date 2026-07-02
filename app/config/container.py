@@ -12,6 +12,7 @@ from app.adapters.outbound.reportlab_pdf import ReportLabPdfGenerator
 from app.adapters.outbound.supabase_repo import SupabaseRepository
 from app.adapters.outbound.telegram import TelegramNotifier
 from app.config.settings import settings
+from app.core.services.assessment_service import AssessmentService
 from app.core.services.execution_service import ExecutionService
 from app.core.services.registration_pipeline import RegistrationPipeline
 
@@ -29,3 +30,4 @@ pipeline = RegistrationPipeline(
 execution_service = ExecutionService(
     repository, weather, settings.iteaf_validity_years
 )
+assessment_service = AssessmentService(repository)

@@ -9,9 +9,23 @@ Conventions:
 
 from dataclasses import dataclass
 from datetime import date, datetime
+from enum import StrEnum
 from uuid import UUID
 
 from app.core.domain.states import LifecycleState
+
+
+class Effectiveness(StrEnum):
+    """How well the treatment worked, assessed days later (Phase 4).
+
+    Stored in English; the PWA shows Buena/Regular/Mala. Used as a Form enum on
+    the assessment endpoint so an invalid value is a 422 at the boundary (like
+    LifecycleState on the list filter), never reaching the DB CHECK.
+    """
+
+    GOOD = "GOOD"  # Buena
+    FAIR = "FAIR"  # Regular
+    POOR = "POOR"  # Mala
 
 
 @dataclass
@@ -165,7 +179,9 @@ class Intervention:
     gps_lon: float | None = None
 
     # ── RESULT block (Phase 4) ──
-    effectiveness: str | None = None  # GOOD | FAIR | POOR (UI: Buena/Regular/Mala)
+    effectiveness: Effectiveness | None = None  # UI: Buena/Regular/Mala
+    effectiveness_date: date | None = None  # when the advisor assessed it
+    effectiveness_notes: str | None = None  # voice-dictated reason (why)
 
     # ── TRACEABILITY block (internal) ──
     audio_storage_key: str | None = None

@@ -7,7 +7,7 @@ second route calling the SAME pipeline — no business logic changes.
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from uuid import UUID, uuid5
 
 from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, Request, UploadFile
@@ -18,7 +18,13 @@ from app.adapters.outbound.telegram import download_voice
 from app.config import container
 from app.config.settings import settings
 from app.core.domain.errors import DomainError, InfrastructureError
-from app.core.domain.models import Equipment, Holding, Intervention, Plot
+from app.core.domain.models import (
+    Effectiveness,
+    Equipment,
+    Holding,
+    Intervention,
+    Plot,
+)
 from app.core.domain.states import LifecycleState
 
 logger = logging.getLogger(__name__)
@@ -258,6 +264,53 @@ async def confirm_execution(
     return JSONResponse(content=await _record_response(intervention))
 
 
+@app.patch("/api/interventions/{intervention_id}/effectiveness")
+async def assess_effectiveness(
+    intervention_id: UUID,
+    effectiveness: Effectiveness = Form(...),
+    effectiveness_date: date = Form(...),
+    effectiveness_notes: str | None = Form(None),
+    advisor_id: UUID = Depends(current_advisor_id),
+) -> JSONResponse:
+    """FLUJO C (M6): rate an executed treatment's effectiveness — EXECUTED ->
+    ASSESSED (Phase 4).
+
+    Synchronous like the execution confirm. ``effectiveness`` is validated
+    against the enum at the boundary (a bad value is a 422 before this runs).
+    ``effectiveness_date`` is when the advisor judged the result, prefilled by
+    the PWA with the device date (editable — the assessment happens days after
+    the treatment). ``effectiveness_notes`` is the optional reason the advisor
+    dictated; the PWA transcribes it via POST /api/transcribe first, so it
+    arrives here as already-reviewed text. Scoped to the authenticated advisor,
+    so an unknown id is a 404."""
+    intervention = await container.assessment_service.assess(
+        intervention_id=intervention_id,
+        advisor_id=advisor_id,
+        effectiveness=effectiveness,
+        effectiveness_date=effectiveness_date,
+        effectiveness_notes=effectiveness_notes,
+    )
+    return JSONResponse(content=await _record_response(intervention))
+
+
+@app.post("/api/transcribe")
+async def transcribe_audio(
+    audio: UploadFile = File(...),
+    advisor_id: UUID = Depends(current_advisor_id),
+) -> JSONResponse:
+    """Speech-to-text ONLY — no extraction, no persistence (M6).
+
+    The PWA uses this for the assessment reason: the advisor dictates, we
+    transcribe, and the text goes into an editable textarea the advisor reviews
+    before submitting the assessment. Kept separate from POST /api/records (which
+    also extracts fields and saves a record) precisely so the advisor sees and
+    can correct what Qwen heard before it reaches the legal record. Authenticated
+    like every PWA endpoint; a provider failure surfaces as the 503 from the
+    InfrastructureError handler."""
+    text = await container.transcriber.transcribe(await audio.read())
+    return JSONResponse(content={"text": text})
+
+
 async def _handle_update(update: dict) -> None:
     """Route the update and apply ONE error policy over the whole processing.
 
@@ -404,6 +457,14 @@ def _intervention_detail(
             "operator_name": intervention.operator_name,
             "operator_ropo": intervention.operator_ropo,
             "delivery_note_number": intervention.delivery_note_number,
+            # Assessment block (Phase 4): how well it worked, when, and why.
+            "effectiveness": (
+                intervention.effectiveness.value
+                if intervention.effectiveness
+                else None
+            ),
+            "effectiveness_date": _iso(intervention.effectiveness_date),
+            "effectiveness_notes": intervention.effectiveness_notes,
             # What the advisor dictated (audio itself is not persisted yet).
             "raw_transcription": intervention.raw_transcription,
             # Context the detail renders (the where, the who, the with-what).

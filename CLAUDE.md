@@ -31,7 +31,10 @@ rule: **each milestone must work end-to-end before starting the next.**
       real upload + presigned URL downloaded from a phone)
 - [x] M4 — Minimal PWA: record button + today's list (auth + upload + today's
       list + on-demand PDF download verified on a real phone)
-- [ ] M5 — Full state machine + execution confirmation + AEMET weather
+- [x] M5 — Full state machine (OBSERVATION/PRESCRIBED→EXECUTED) + execution
+      confirmation (FLUJO B: real dose/area/spray/operator, re-validated) +
+      weather at execution via Open-Meteo (WEATHER_PENDING fallback) + ITEAF
+      expiry warning + PWA list→detail screen with actions on the detail
 - [ ] M6 — Effectiveness assessment + delivery-note number
 - [ ] M7 — Campaign validations (signed PDF)
 

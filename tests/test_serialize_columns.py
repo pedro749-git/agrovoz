@@ -38,7 +38,8 @@ _NOT_A_COLUMN = ("CHECK", "UNIQUE", "PRIMARY", "FOREIGN", "CONSTRAINT")
 
 
 def _columns(table: str) -> set[str]:
-    """Column names declared in the ``CREATE TABLE <table> ( ... );`` block."""
+    """Columns of a table: those declared in its ``CREATE TABLE`` block PLUS any
+    added by a later ``ALTER TABLE <table> ... ADD COLUMN`` migration."""
     body = re.search(rf"CREATE TABLE {table} \((.*?)\n\);", _SQL, re.S).group(1)
     cols = set()
     for line in body.splitlines():
@@ -48,6 +49,10 @@ def _columns(table: str) -> set[str]:
         m = re.match(r"([a-z_]+)\s+\w", line)
         if m and not line.upper().startswith(_NOT_A_COLUMN):
             cols.add(m.group(1))
+    # Columns a later migration adds (e.g. the M6 effectiveness fields).
+    for alter in re.finditer(rf"ALTER TABLE {table}\b(.*?);", _SQL, re.S):
+        for add in re.finditer(r"ADD COLUMN\s+([a-z_]+)", alter.group(1)):
+            cols.add(add.group(1))
     return cols
 
 
