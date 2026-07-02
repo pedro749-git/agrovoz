@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { getIntervention } from './api.js'
+import { PdfButton, ConfirmExecution } from './RecordActions.jsx'
 
 // Spanish label + icon + colour per lifecycle state (inspired by the prototype).
 const STATE = {
@@ -85,6 +86,10 @@ function Detail() {
   const [r, setR] = useState(null)
   const [status, setStatus] = useState('loading') // loading | ready | error
   const [error, setError] = useState('')
+  // Bumped after a successful execution confirm to re-fetch the FULL detail:
+  // the confirm endpoint returns the lean list projection, so re-loading here
+  // keeps the rich context blocks (plot/holding/transcription) intact.
+  const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
     let active = true
@@ -104,7 +109,7 @@ function Detail() {
     return () => {
       active = false
     }
-  }, [id])
+  }, [id, reloadKey])
 
   const s = r ? (STATE[r.lifecycle_state] ?? STATE.OBSERVATION) : null
 
@@ -236,6 +241,20 @@ function Detail() {
                 </p>
               </Section>
             )}
+
+            {/* Actions live here now (moved off the list row). The PDF download
+                for prescriptions, and confirming a prescription's execution. */}
+            <div className="mt-6 flex flex-col border-t border-line pt-3">
+              {r.has_pdf && <PdfButton interventionId={r.id} />}
+              {r.lifecycle_state === 'PRESCRIBED' && (
+                <ConfirmExecution
+                  interventionId={r.id}
+                  // Re-fetch the full detail so the promoted EXECUTED record keeps
+                  // its rich context (the confirm response is the lean projection).
+                  onConfirmed={() => setReloadKey((k) => k + 1)}
+                />
+              )}
+            </div>
 
             <div className="h-8" />
           </>

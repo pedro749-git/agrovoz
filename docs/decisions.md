@@ -3,6 +3,22 @@
 One line per decision (taken AND discarded): what · why · date.
 This file becomes the thesis' design chapter.
 
+## 2026-06-30 — PWA: actions moved from the list row onto the detail
+
+- MOVED PdfButton + ConfirmExecution out of TodayList into a shared
+  RecordActions.jsx, rendered only on the detail screen. The list row is now a
+  pure summary and the WHOLE <li> is the tap target (no inner buttons to avoid
+  anymore), completing the prototype's "compact list -> rich detail" pattern.
+- On a successful execution confirm the detail RE-FETCHES itself (reloadKey bump)
+  instead of swapping in the confirm response: that response is the lean list
+  projection, so re-loading keeps the rich context blocks (plot/holding/
+  transcription) the detail renders. The list used to swap the row in place, but
+  the list no longer shows actions, so a today-list refresh happens on next
+  visit; acceptable (no live row to keep in sync).
+- Added the spray volume / operator / operator-ROPO inputs to the confirm form
+  (backend already accepted them), so the "Caldo"/"Aplicador" lines on the detail
+  stop being permanently blank. Delivery-note number stays out — it is M6.
+
 ## 2026-06-30 — PWA: router + record detail screen (bridge M5→M6)
 
 - ADDED React Router (was ad-hoc useState screen switching, fine for 2 screens,
