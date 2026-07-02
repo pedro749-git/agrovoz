@@ -27,14 +27,22 @@ de empezar el siguiente.
       Tailwind): login por código de acceso al email (o contraseña), botón de grabación, subida del
       audio al mismo pipeline, lista de registros de hoy y descarga del PDF bajo
       demanda.
-- [ ] M5 — máquina de estados + confirmación de ejecución + clima AEMET ·
-      M6 — evaluación de eficacia + nº de albarán · M7 — validaciones de campaña.
+- [x] **M5** — Máquina de estados (OBSERVATION / PRESCRIBED → EXECUTED) +
+      confirmación de ejecución (FLUJO B: dosis/área/caldo/aplicador reales,
+      revalidadas) + clima capturado en la fecha real vía Open-Meteo (con
+      `WEATHER_PENDING` si falla) + aviso de caducidad de la inspección ITEAF +
+      pantalla de detalle en la PWA (lista → detalle, con las acciones en el detalle).
+- [ ] **M6** — Evaluación de eficacia (Buena/Regular/Mala) + nº de albarán.
+      **Backend hecho**: EXECUTED → ASSESSED (`AssessmentService`), endpoint de
+      valoración y endpoint de solo-transcripción para dictar el motivo. Falta la
+      UI de valoración en la PWA.
+- [ ] M7 — validaciones de campaña (PDF firmado).
 
 ## Stack
 
 **Backend**: Python 3.12 · FastAPI + Uvicorn · Pydantic V2 · Supabase
 (PostgreSQL + Auth por código OTP al email / contraseña) · Qwen-Audio + Qwen Instruct vía DashScope ·
-Alibaba Cloud OSS · ReportLab. Dependencias con `uv`.
+Alibaba Cloud OSS · ReportLab · clima vía Open-Meteo. Dependencias con `uv`.
 
 **PWA (M4)**: React 19 + Vite + Tailwind + vite-plugin-pwa. Dependencias con `npm`.
 
@@ -42,15 +50,16 @@ Alibaba Cloud OSS · ReportLab. Dependencias con `uv`.
 
 ```
 app/
-  core/        domain/ (modelos, schemas, estados, errores)
+  core/        domain/ (modelos, schemas, estados, errores, cálculos puros)
                ports/  (ABCs: Transcriber, Extractor, Repository, Notifier,
-                        Storage, PdfGenerator)
-               services/ (registration_pipeline = FLUJO A)
-  adapters/    inbound/  api.py (webhook FastAPI de Telegram)
+                        Storage, PdfGenerator, Weather)
+               services/ (registration_pipeline = FLUJO A · execution_service =
+                          FLUJO B · assessment_service = FLUJO C · validation_service)
+  adapters/    inbound/  api.py (FastAPI: PWA + webhook de Telegram)
                outbound/ qwen.py · supabase_repo.py · oss_storage.py ·
-                         reportlab_pdf.py · telegram.py
+                         reportlab_pdf.py · open_meteo_weather.py · telegram.py
   config/      settings.py · container.py (composition root) · .env
-pwa/           React + Vite + Tailwind + vite-plugin-pwa (cliente M4)
+pwa/           React + Vite + Tailwind + vite-plugin-pwa (cliente M4+)
 ```
 
 El núcleo solo depende de puertos (ABCs): el webhook de Telegram y la PWA llaman
@@ -153,6 +162,8 @@ La suite cubre:
 | Archivo | Qué prueba |
 | --- | --- |
 | `test_registration_pipeline.py` | el FLUJO A de punta a punta (con puertos falsos) |
+| `test_execution_service.py` | FLUJO B: confirmación de ejecución + clima + aviso ITEAF |
+| `test_assessment_service.py` | FLUJO C: valoración de eficacia (EXECUTED → ASSESSED) |
 | `test_validation_service.py` | validación legal (dosis, área, producto autorizado) |
 | `test_schemas.py` | `ExtractedFields` (saneado de la salida del LLM) |
 | `test_serialize_columns.py` | modelo de dominio ↔ columnas de la BD (sin drift) |
