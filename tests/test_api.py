@@ -12,8 +12,21 @@ from fastapi.testclient import TestClient
 from app.adapters.inbound import api
 from app.adapters.inbound.auth import current_advisor_id
 from app.config import container
-from app.core.domain.errors import DoseError, PlotNotFoundError, TranscriptionError
-from app.core.domain.models import Equipment, Holding, Intervention, Plot
+from app.core.domain.errors import (
+    DoseError,
+    HoldingNotFoundError,
+    PlotNotFoundError,
+    TranscriptionError,
+    ValidationExistsError,
+)
+from app.core.domain.models import (
+    Equipment,
+    Holding,
+    Intervention,
+    Plot,
+    Validation,
+    ValidationType,
+)
 from app.core.domain.states import LifecycleState
 
 ADV = uuid4()
@@ -247,6 +260,79 @@ def test_transcribe_200(client, monkeypatch):
                     files={"audio": ("a.ogg", b"x", "audio/ogg")})
     assert r.status_code == 200, r.text
     assert r.json()["text"] == "la plaga ha remitido bastante"
+
+
+def _validation(**overrides):
+    base = dict(
+        advisor_id=ADV, holding_id=uuid4(), campaign="2026",
+        type=ValidationType.MID_CYCLE,
+        validation_date="2026-06-30T10:00:00Z", conformity=True,
+        period_start="2026-01-01", period_end="2026-06-30",
+        intervention_count=3, id=uuid4())
+    base.update(overrides)
+    from datetime import date, datetime
+    base["validation_date"] = datetime.fromisoformat(base["validation_date"])
+    base["period_start"] = date.fromisoformat(base["period_start"])
+    base["period_end"] = date.fromisoformat(base["period_end"])
+    return Validation(**base)
+
+
+def test_create_validation_200(client, monkeypatch):
+    holding_id = uuid4()
+    val = _validation(holding_id=holding_id)
+    captured = {}
+
+    class FakeService:
+        async def validate_campaign(self, **kwargs):
+            captured.update(kwargs)
+            return val
+
+    monkeypatch.setattr(container, "campaign_validation_service", FakeService())
+    r = client.post(
+        f"/api/holdings/{holding_id}/validations",
+        data={"campaign": "2026", "validation_type": "MID_CYCLE",
+              "conformity": "true", "validation_date": "2026-06-30T10:00:00Z"})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["type"] == "MID_CYCLE"
+    assert body["intervention_count"] == 3
+    # The enum is parsed at the boundary before reaching the service.
+    assert captured["validation_type"].value == "MID_CYCLE"
+
+
+def test_create_validation_bad_type_422(client):
+    # An out-of-enum type is rejected by FastAPI validation before the service.
+    r = client.post(
+        f"/api/holdings/{uuid4()}/validations",
+        data={"campaign": "2026", "validation_type": "YEARLY",
+              "conformity": "true", "validation_date": "2026-06-30T10:00:00Z"})
+    assert r.status_code == 422
+
+
+def test_create_validation_duplicate_422(client, monkeypatch):
+    class FakeService:
+        async def validate_campaign(self, **kwargs):
+            raise ValidationExistsError("ya existe")
+
+    monkeypatch.setattr(container, "campaign_validation_service", FakeService())
+    r = client.post(
+        f"/api/holdings/{uuid4()}/validations",
+        data={"campaign": "2026", "validation_type": "FINAL",
+              "conformity": "true", "validation_date": "2026-06-30T10:00:00Z"})
+    assert r.status_code == 422 and r.json()["error"] == "VALIDATION_EXISTS"
+
+
+def test_create_validation_foreign_holding_404(client, monkeypatch):
+    class FakeService:
+        async def validate_campaign(self, **kwargs):
+            raise HoldingNotFoundError("no encuentro esa explotación")
+
+    monkeypatch.setattr(container, "campaign_validation_service", FakeService())
+    r = client.post(
+        f"/api/holdings/{uuid4()}/validations",
+        data={"campaign": "2026", "validation_type": "FINAL",
+              "conformity": "true", "validation_date": "2026-06-30T10:00:00Z"})
+    assert r.status_code == 404 and r.json()["error"] == "HOLDING_NOT_FOUND"
 
 
 def test_post_without_token_401():

@@ -41,3 +41,17 @@ def iteaf_inspection_expired(
             year=inspection_date.year + validity_years, day=28
         )
     return treatment_date.date() > expiry
+
+
+def campaign_start(campaign: str) -> date:
+    """First day of a campaign, used as the period start for the FIRST validation
+    of a holding+campaign (later validations start the day after the previous one).
+
+    A campaign is labelled by its (starting) year: '2026' or '2026-2027'. We take
+    the leading 4-digit year and return January 1st of it — the simplest civil
+    boundary (there is no per-crop agronomic calendar in the MVP; see decisions
+    log). Raises ValueError if the label does not start with a 4-digit year, so a
+    malformed campaign fails loudly instead of silently mis-dating the period.
+    """
+    year = int(campaign[:4])  # ValueError if not 4 leading digits
+    return date(year, 1, 1)

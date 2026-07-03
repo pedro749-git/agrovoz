@@ -17,6 +17,7 @@ Contract notes:
 """
 
 from abc import ABC, abstractmethod
+from datetime import date
 from uuid import UUID
 
 from app.core.domain.models import (
@@ -26,6 +27,7 @@ from app.core.domain.models import (
     Intervention,
     Plot,
     Product,
+    Validation,
 )
 from app.core.domain.states import LifecycleState
 
@@ -111,3 +113,23 @@ class Repository(ABC):
     async def update_intervention(self, intervention: Intervention) -> Intervention:
         """Persist changes to an existing intervention (matched by id) and return
         the updated row. FLUJO B (M5): PRESCRIBED -> EXECUTED."""
+
+    @abstractmethod
+    async def list_interventions_in_period(
+        self, holding_id: UUID, *, start: date, end: date
+    ) -> list[Intervention]:
+        """A holding's interventions whose ``created_at`` falls in the civil date
+        range [start, end] (inclusive), oldest first — the actuaciones a campaign
+        validation covers (FLUJO C, M7). Filters ``deleted_at IS NULL``."""
+
+    @abstractmethod
+    async def list_validations(
+        self, holding_id: UUID, campaign: str
+    ) -> list[Validation]:
+        """A holding's validations for one campaign (0, 1 or 2 rows: MID_CYCLE /
+        FINAL). Lets the service reject a duplicate type and derive the next
+        period start from the latest ``period_end``. Filters ``deleted_at IS NULL``."""
+
+    @abstractmethod
+    async def save_validation(self, validation: Validation) -> Validation:
+        """Insert and return the persisted campaign validation (FLUJO C, M7)."""

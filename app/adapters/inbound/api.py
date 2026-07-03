@@ -24,6 +24,8 @@ from app.core.domain.models import (
     Holding,
     Intervention,
     Plot,
+    Validation,
+    ValidationType,
 )
 from app.core.domain.states import LifecycleState
 
@@ -35,7 +37,12 @@ _TELEGRAM_NS = UUID("9e3a7c1f-5b2d-4e8a-bf6c-1d2e3f4a5b6c")
 
 # Domain errors that mean "the advisor referenced something that does not
 # exist" map to 404; every other business-rule violation is a 422.
-_NOT_FOUND_CODES = {"PLOT_NOT_FOUND", "EQUIPMENT_NOT_FOUND", "INTERVENTION_NOT_FOUND"}
+_NOT_FOUND_CODES = {
+    "PLOT_NOT_FOUND",
+    "EQUIPMENT_NOT_FOUND",
+    "INTERVENTION_NOT_FOUND",
+    "HOLDING_NOT_FOUND",
+}
 
 app = FastAPI(title="GIP Advisor API")
 
@@ -309,6 +316,56 @@ async def transcribe_audio(
     InfrastructureError handler."""
     text = await container.transcriber.transcribe(await audio.read())
     return JSONResponse(content={"text": text})
+
+
+@app.post("/api/holdings/{holding_id}/validations")
+async def create_validation(
+    holding_id: UUID,
+    campaign: str = Form(...),
+    validation_type: ValidationType = Form(...),
+    conformity: bool = Form(...),
+    validation_date: datetime = Form(...),
+    remarks: str | None = Form(None),
+    advisor_id: UUID = Depends(current_advisor_id),
+) -> JSONResponse:
+    """FLUJO C (M7): the advisor signs a campaign validation over a holding's
+    interventions — mandatory twice per campaign (MID_CYCLE + FINAL, Phase 5).
+
+    Synchronous like the other write endpoints. ``validation_type`` is validated
+    against the enum at the boundary (a bad value is a 422 before this runs).
+    ``validation_date`` is the device timestamp (the advisor may sign offline).
+    The service derives the period covered and counts the interventions in it. A
+    non-conform validation must carry ``remarks`` (else 422). The holding is
+    scoped to the authenticated advisor, so an unknown OR foreign id is a 404."""
+    validation = await container.campaign_validation_service.validate_campaign(
+        holding_id=holding_id,
+        advisor_id=advisor_id,
+        campaign=campaign,
+        validation_type=validation_type,
+        conformity=conformity,
+        validation_date=validation_date,
+        remarks=remarks,
+    )
+    return JSONResponse(content=_validation_fields(validation))
+
+
+def _validation_fields(validation: Validation) -> dict:
+    """Projection of a signed campaign validation (sync, NO I/O). English data
+    identifiers; the PWA maps them to Spanish labels. The signed PDF link is
+    added on demand elsewhere (M7.2), not here."""
+    return {
+        "id": str(validation.id),
+        "holding_id": str(validation.holding_id),
+        "campaign": validation.campaign,
+        "type": validation.type.value,
+        "validation_date": _iso(validation.validation_date),
+        "conformity": validation.conformity,
+        "period_start": _iso(validation.period_start),
+        "period_end": _iso(validation.period_end),
+        "intervention_count": validation.intervention_count,
+        "remarks": validation.remarks,
+        "created_at": _iso(validation.created_at),
+    }
 
 
 async def _handle_update(update: dict) -> None:

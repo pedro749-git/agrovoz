@@ -28,6 +28,17 @@ class Effectiveness(StrEnum):
     POOR = "POOR"  # Mala
 
 
+class ValidationType(StrEnum):
+    """The two mandatory campaign validations (Phase 5).
+
+    Used as a Form enum on the validation endpoint so a bad value is a 422 at the
+    boundary, never reaching the DB CHECK / UNIQUE(holding, campaign, type).
+    """
+
+    MID_CYCLE = "MID_CYCLE"  # durante el ciclo
+    FINAL = "FINAL"  # al cierre de la campaña
+
+
 @dataclass
 class Advisor:
     """The GIP advisor: prescribes interventions and validates holdings."""
@@ -204,7 +215,7 @@ class Validation:
     advisor_id: UUID
     holding_id: UUID
     campaign: str  # '2026' or '2026-2027'
-    type: str  # MID_CYCLE | FINAL (UNIQUE per holding+campaign in DB)
+    type: ValidationType  # UNIQUE per holding+campaign in DB
     validation_date: datetime
     conformity: bool
     period_start: date

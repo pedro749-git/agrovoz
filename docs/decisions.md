@@ -3,6 +3,34 @@
 One line per decision (taken AND discarded): what · why · date.
 This file becomes the thesis' design chapter.
 
+## 2026-07-03 — M7.1 backend: campaign validation (FLUJO C, Phase 5)
+
+- ADDED the advisor's signed campaign validation via a new
+  CampaignValidationService (POST /api/holdings/:id/validations): checks the
+  holding is the advisor's (foreign/unknown -> indistinguishable 404), rejects a
+  duplicate type, derives the covered period, counts its interventions, and
+  saves. `ValidationType` modelled as a StrEnum (MID_CYCLE/FINAL) so a bad value
+  is a 422 at the boundary — never reaching the DB CHECK / UNIQUE.
+- NO campaigns table: a campaign stays a plain string label ('2026') on the
+  validation row (UNIQUE holding+campaign+type). Considered a `campaigns` table
+  grouping its two validations; DISCARDED — YAGNI: nothing needs a campaign
+  entity of its own, the UI grouping is presentation (GROUP BY campaign), and a
+  table would add a join + lifecycle for zero domain gain. Revisit if campaigns
+  ever grow attributes (dates, crop calendar).
+- PERIOD covered is AUTO-derived, not asked: the FIRST validation of a campaign
+  starts at `campaign_start` (Jan 1 of the 4-digit year; ValueError ->
+  InvalidCampaignError 422 so a malformed label fails loudly), later ones the
+  day AFTER the previous `period_end` (no gap/overlap); end = signing date.
+  Filtered by `created_at` (civil day, [start 00:00, end+1day)) — the one date
+  every intervention carries (OBSERVATIONs have no device timestamp).
+- A non-conform validation MUST carry remarks (else RemarksRequiredError 422);
+  blank/whitespace remarks normalise to NULL, mirroring the assessment notes.
+- SERVICE named `campaign_validation_service.py` / `CampaignValidationService`,
+  NOT the spec's `validation_service.py` — that name is already the pipeline's
+  LEGAL validation (dose/area). Deliberate deviation to avoid the collision;
+  considered renaming the legal one (DISCARDED — churns existing imports for no
+  gain).
+
 ## 2026-07-02 — M6 PWA: effectiveness assessment UI + mic dictation
 
 - ADDED an AssessEffectiveness block on the detail of an EXECUTED record: three

@@ -54,6 +54,35 @@ class InterventionNotFoundError(DomainError):
     code = "INTERVENTION_NOT_FOUND"
 
 
+class HoldingNotFoundError(DomainError):
+    """No holding with that id is managed by this advisor (FLUJO C, M7).
+
+    Used for both "does not exist" and "not yours" — an indistinguishable 404,
+    so the advisor cannot probe holdings that are not theirs."""
+
+    code = "HOLDING_NOT_FOUND"
+
+
+class ValidationExistsError(DomainError):
+    """This campaign validation (holding + campaign + type) already exists —
+    UNIQUE(holding, campaign, type). A campaign is signed once per type."""
+
+    code = "VALIDATION_EXISTS"
+
+
+class RemarksRequiredError(DomainError):
+    """A non-conform validation must explain why (conformity=false -> remarks)."""
+
+    code = "REMARKS_REQUIRED"
+
+
+class InvalidCampaignError(DomainError):
+    """The campaign label is not a 4-digit year ('2026' / '2026-2027'), so the
+    period start cannot be derived."""
+
+    code = "INVALID_CAMPAIGN"
+
+
 class StateTransitionError(DomainError):
     """Illegal lifecycle transition (e.g. assess before execute)."""
 

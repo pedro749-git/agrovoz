@@ -9,7 +9,7 @@ Every read filters ``deleted_at IS NULL`` (hard rule 1: soft-delete only).
 """
 
 import dataclasses
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from enum import Enum
 from typing import get_args, get_type_hints
 from uuid import UUID
@@ -27,6 +27,7 @@ from app.core.domain.models import (
     Intervention,
     Plot,
     Product,
+    Validation,
 )
 from app.core.domain.states import LifecycleState
 from app.core.ports.repository import Repository
@@ -328,3 +329,41 @@ class SupabaseRepository(Repository):
                 f"update_intervention matched no row (id={intervention.id})"
             )
         return _deserialize(Intervention, res.data[0])
+
+    async def list_interventions_in_period(
+        self, holding_id: UUID, *, start: date, end: date
+    ) -> list[Intervention]:
+        client = await get_client()
+        # created_at is a UTC timestamp; the period is civil dates. Bound with
+        # [start 00:00, end+1day 00:00) so the whole `end` day is included. Minor
+        # timezone fuzz at the day boundary is acceptable for a count (M7).
+        res = await _run(
+            client.table("interventions")
+            .select("*")
+            .eq("holding_id", str(holding_id))
+            .gte("created_at", start.isoformat())
+            .lt("created_at", (end + timedelta(days=1)).isoformat())
+            .is_("deleted_at", "null")
+            .order("created_at", desc=False)
+        )
+        return [_deserialize(Intervention, row) for row in res.data]
+
+    async def list_validations(
+        self, holding_id: UUID, campaign: str
+    ) -> list[Validation]:
+        client = await get_client()
+        res = await _run(
+            client.table("validations")
+            .select("*")
+            .eq("holding_id", str(holding_id))
+            .eq("campaign", campaign)
+            .is_("deleted_at", "null")
+        )
+        return [_deserialize(Validation, row) for row in res.data]
+
+    async def save_validation(self, validation: Validation) -> Validation:
+        client = await get_client()
+        res = await _run(
+            client.table("validations").insert(_serialize(validation))
+        )
+        return _deserialize(Validation, res.data[0])
