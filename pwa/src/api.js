@@ -171,3 +171,48 @@ export async function getPdfUrl(interventionId) {
   const { pdf_url } = await unwrap(response)
   return pdf_url
 }
+
+// GET /api/holdings — the advisor's holdings, each with its plots and all its
+// validations (M7). The validation screen groups them by holding (a validation
+// is the HOLDING's, not a plot's) and, within each, by campaign.
+export async function listHoldings() {
+  const response = await fetch('/api/holdings', {
+    headers: await authHeader(),
+  })
+  return unwrap(response)
+}
+
+// POST /api/holdings/:id/validations — signs a campaign validation (MID_CYCLE or
+// FINAL). `validationDate` is the device clock (the advisor may sign offline);
+// the backend derives the covered period and counts the interventions in it. A
+// non-conform validation must carry `remarks` (the backend enforces it). The
+// response includes a presigned link to the just-generated PDF. Form-encoded
+// like the other write endpoints.
+export async function createValidation(
+  holdingId,
+  { campaign, validationType, conformity, validationDate, remarks },
+) {
+  const form = new FormData()
+  form.append('campaign', campaign)
+  form.append('validation_type', validationType)
+  form.append('conformity', conformity ? 'true' : 'false')
+  form.append('validation_date', validationDate)
+  if (remarks && remarks.trim() !== '') form.append('remarks', remarks)
+
+  const response = await fetch(`/api/holdings/${holdingId}/validations`, {
+    method: 'POST',
+    headers: await authHeader(),
+    body: form,
+  })
+  return unwrap(response)
+}
+
+// GET /api/validations/:id/pdf — signs the signed-validation PDF link on demand
+// (the list carries only has_pdf). Returns the presigned URL; the caller opens it.
+export async function getValidationPdfUrl(validationId) {
+  const response = await fetch(`/api/validations/${validationId}/pdf`, {
+    headers: await authHeader(),
+  })
+  const { pdf_url } = await unwrap(response)
+  return pdf_url
+}

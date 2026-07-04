@@ -23,6 +23,13 @@ function Home() {
           <div className="flex items-center gap-4">
             <button
               type="button"
+              onClick={() => navigate('/validaciones')}
+              className="text-xs font-semibold opacity-80 underline"
+            >
+              Validaciones
+            </button>
+            <button
+              type="button"
               onClick={() => navigate('/ajustes')}
               className="text-xs font-semibold opacity-80 underline"
             >

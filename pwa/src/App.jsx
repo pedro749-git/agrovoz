@@ -4,6 +4,7 @@ import Login from './Login.jsx'
 import Settings from './Settings.jsx'
 import Home from './Home.jsx'
 import Detail from './Detail.jsx'
+import Validation from './Validation.jsx'
 
 // Wraps Settings (which takes an onClose) as a route element, sending "Volver"
 // back home — Settings itself stays router-agnostic.
@@ -31,6 +32,7 @@ function App() {
     <Routes>
       <Route path="/" element={<Home />} />
       <Route path="/registro/:id" element={<Detail />} />
+      <Route path="/validaciones" element={<Validation />} />
       <Route path="/ajustes" element={<SettingsRoute session={session} />} />
       {/* Unknown path -> home (e.g. a stale deep link). */}
       <Route path="*" element={<Navigate to="/" replace />} />

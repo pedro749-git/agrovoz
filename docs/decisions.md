@@ -3,6 +3,25 @@
 One line per decision (taken AND discarded): what · why · date.
 This file becomes the thesis' design chapter.
 
+## 2026-07-04 — M7.3 PWA: validation screen (grouped by holding → campaign)
+
+- ADDED Validation.jsx (route /validaciones, linked from Home): the advisor's
+  holdings, each with its plots and, per campaign, the two conformity slots
+  (Intermedia / Final) with a 0/2..2/2 counter. A signed slot shows the verdict
+  + date + intervention count + a downloadable PDF (ValidationPdf mirrors
+  PdfButton's blob-download); a missing slot offers a sign form (Conforme / No
+  conforme + remarks; the backend requires remarks when not conform).
+- The CURRENT campaign (device year, Europe/Madrid) is ALWAYS shown even with 0
+  validations, so there is always somewhere to sign this year — computed
+  client-side (campaigns = {current} ∪ {campaigns with validations}); no
+  campaign is created in the DB until a validation row is inserted. Past
+  campaigns appear only if they have validations.
+- validation_date is the device clock at signing (hard rule 2). On success the
+  screen re-fetches so the new validation + counter update.
+- api.js: listHoldings, createValidation, getValidationPdfUrl.
+- Pending: eyeball on a real phone + UI polish (next session) before marking M7
+  done in the README.
+
 ## 2026-07-04 — M7.3 backend: holdings overview + validation PDF link
 
 - ADDED GET /api/holdings: the advisor's holdings, each with its plots and ALL
