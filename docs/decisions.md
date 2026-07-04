@@ -3,6 +3,22 @@
 One line per decision (taken AND discarded): what · why · date.
 This file becomes the thesis' design chapter.
 
+## 2026-07-03 — Refactor: split JSON presenters out of api.py
+
+- api.py had grown to 630 lines. MOVED the pure JSON-shaping helpers
+  (record_fields, intervention_detail, validation_fields + _iso) to a new
+  app/adapters/inbound/presenters.py — api.py drops to ~475 and now reads as
+  routing + error mapping; presenters.py = how entities serialize (no FastAPI,
+  no I/O, trivially testable). _record_response stays in api.py because it does
+  I/O (signs a PDF link) and needs the container — the one presenter that isn't
+  pure. NOT abstraction-ahead-of-need: it reorganises code that already existed.
+  The endpoint tests already cover the presenters, so no new test file.
+- ALSO sectioned api.py with banner comments (exception handlers · health · PWA
+  REST API · legacy Telegram) and moved the whole Telegram path (webhook + its
+  helpers + _TELEGRAM_NS) to the bottom, so the live PWA routes read together
+  and the M1 legacy is visibly cordoned off. Reorder + comments only, no bodies
+  touched; module docstring updated (PWA is the live inbound, Telegram legacy).
+
 ## 2026-07-03 — M7.1 backend: campaign validation (FLUJO C, Phase 5)
 
 - ADDED the advisor's signed campaign validation via a new

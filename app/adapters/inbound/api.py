@@ -1,9 +1,16 @@
-"""Inbound FastAPI app (M2).
+"""Inbound FastAPI app.
 
-The Telegram webhook is a thin inbound adapter over the core pipeline: it ACKs
-immediately (Telegram retries on timeout), then processes in the background and
-pushes the result back through the Notifier port. The future PWA (M4) will be a
-second route calling the SAME pipeline — no business logic changes.
+Two inbound routes over the SAME core pipeline:
+- the PWA REST API (the live inbound, M4+): synchronous JSON endpoints the
+  advisor's UI awaits — FLUJO A (record), B (execution) and C (assessment /
+  campaign validation);
+- the Telegram webhook (legacy M1, replaced by the PWA): ACKs immediately
+  (Telegram retries on timeout), processes in the background and replies through
+  the Notifier port. Kept for reference; not used by the product.
+
+The file is laid out in sections (see the banner comments): app + error shape,
+exception handlers, health, the PWA REST API, and the legacy Telegram path. JSON
+shaping lives in ``presenters`` — this module is routing + error mapping.
 """
 
 import logging
@@ -13,27 +20,16 @@ from uuid import UUID, uuid5
 from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, Request, UploadFile
 from fastapi.responses import JSONResponse
 
+from app.adapters.inbound import presenters
 from app.adapters.inbound.auth import AuthError, current_advisor_id
 from app.adapters.outbound.telegram import download_voice
 from app.config import container
 from app.config.settings import settings
 from app.core.domain.errors import DomainError, InfrastructureError
-from app.core.domain.models import (
-    Effectiveness,
-    Equipment,
-    Holding,
-    Intervention,
-    Plot,
-    Validation,
-    ValidationType,
-)
+from app.core.domain.models import Effectiveness, Intervention, ValidationType
 from app.core.domain.states import LifecycleState
 
 logger = logging.getLogger(__name__)
-
-# Fixed namespace to derive deterministic idempotency keys from Telegram
-# updates (any constant UUID works; it just must never change).
-_TELEGRAM_NS = UUID("9e3a7c1f-5b2d-4e8a-bf6c-1d2e3f4a5b6c")
 
 # Domain errors that mean "the advisor referenced something that does not
 # exist" map to 404; every other business-rule violation is a 422.
@@ -50,6 +46,11 @@ app = FastAPI(title="GIP Advisor API")
 def _error(status: int, code: str, mensaje: str) -> JSONResponse:
     """The single API error shape (spec §7): English code, Spanish message."""
     return JSONResponse(status_code=status, content={"error": code, "mensaje": mensaje})
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Exception handlers — one error policy shared by every HTTP route
+# ══════════════════════════════════════════════════════════════════════════════
 
 
 @app.exception_handler(DomainError)
@@ -98,16 +99,9 @@ async def _unexpected_error_handler(_: Request, exc: Exception) -> JSONResponse:
     return _error(500, "INTERNAL_ERROR", "Error inesperado. Inténtalo de nuevo.")
 
 
-def _transaction_id(update: dict) -> UUID:
-    """Stable idempotency key for a Telegram update (hard rule 3).
-
-    Telegram redelivers the SAME ``update_id`` when it retries a webhook, so a
-    deterministic uuid5 over it means a redelivery hits the pipeline's
-    idempotency check (returns the existing row) instead of minting a fresh
-    uuid4 and creating a duplicate legal record. The PWA (M4) will instead send
-    its own ``crypto.randomUUID()`` per submission.
-    """
-    return uuid5(_TELEGRAM_NS, str(update["update_id"]))
+# ══════════════════════════════════════════════════════════════════════════════
+# Health
+# ══════════════════════════════════════════════════════════════════════════════
 
 
 @app.get("/health")
@@ -115,12 +109,9 @@ async def health() -> dict:
     return {"status": "ok"}
 
 
-@app.post("/telegram/webhook")
-async def telegram_webhook(request: Request, background: BackgroundTasks) -> dict:
-    update = await request.json()
-    # ACK now; the heavy work (download + Qwen + DB) runs after responding.
-    background.add_task(_handle_update, update)
-    return {"ok": True}
+# ══════════════════════════════════════════════════════════════════════════════
+# PWA REST API — the live inbound (FLUJO A/B/C), synchronous JSON the UI awaits
+# ══════════════════════════════════════════════════════════════════════════════
 
 
 @app.post("/api/records")
@@ -167,7 +158,7 @@ async def list_interventions(
     interventions = await container.repository.list_interventions(
         advisor_id, state=state
     )
-    return JSONResponse(content=[_record_fields(i) for i in interventions])
+    return JSONResponse(content=[presenters.record_fields(i) for i in interventions])
 
 
 @app.get("/api/interventions/{intervention_id}")
@@ -198,7 +189,7 @@ async def get_intervention_detail(
         else None
     )
     return JSONResponse(
-        content=_intervention_detail(intervention, plot, holding, equipment)
+        content=presenters.intervention_detail(intervention, plot, holding, equipment)
     )
 
 
@@ -346,26 +337,60 @@ async def create_validation(
         validation_date=validation_date,
         remarks=remarks,
     )
-    return JSONResponse(content=_validation_fields(validation))
+    return JSONResponse(content=presenters.validation_fields(validation))
 
 
-def _validation_fields(validation: Validation) -> dict:
-    """Projection of a signed campaign validation (sync, NO I/O). English data
-    identifiers; the PWA maps them to Spanish labels. The signed PDF link is
-    added on demand elsewhere (M7.2), not here."""
-    return {
-        "id": str(validation.id),
-        "holding_id": str(validation.holding_id),
-        "campaign": validation.campaign,
-        "type": validation.type.value,
-        "validation_date": _iso(validation.validation_date),
-        "conformity": validation.conformity,
-        "period_start": _iso(validation.period_start),
-        "period_end": _iso(validation.period_end),
-        "intervention_count": validation.intervention_count,
-        "remarks": validation.remarks,
-        "created_at": _iso(validation.created_at),
-    }
+async def _record_response(intervention: Intervention) -> dict:
+    """Create-response: the common fields PLUS a best-effort presigned PDF link.
+
+    The only presenter that does I/O, so it stays here (next to the container)
+    instead of in the pure ``presenters`` module. Signing is per-record I/O, so
+    it lives here (one record) and NOT in the list endpoint. A signing failure
+    must NOT turn an already-saved record into an error response — we log and
+    return the record without the link.
+    """
+    data = presenters.record_fields(intervention)
+    data["pdf_url"] = None
+    if intervention.prescription_pdf_key:
+        try:
+            data["pdf_url"] = await container.storage.presigned_url(
+                intervention.prescription_pdf_key
+            )
+        except Exception:
+            logger.warning(
+                "No se pudo firmar el enlace del PDF (OSS); respuesta sin enlace",
+                exc_info=True,
+            )
+    return data
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Telegram webhook — legacy M1 path, replaced by the PWA (kept for reference)
+# ══════════════════════════════════════════════════════════════════════════════
+
+# Fixed namespace to derive deterministic idempotency keys from Telegram
+# updates (any constant UUID works; it just must never change).
+_TELEGRAM_NS = UUID("9e3a7c1f-5b2d-4e8a-bf6c-1d2e3f4a5b6c")
+
+
+@app.post("/telegram/webhook")
+async def telegram_webhook(request: Request, background: BackgroundTasks) -> dict:
+    update = await request.json()
+    # ACK now; the heavy work (download + Qwen + DB) runs after responding.
+    background.add_task(_handle_update, update)
+    return {"ok": True}
+
+
+def _transaction_id(update: dict) -> UUID:
+    """Stable idempotency key for a Telegram update (hard rule 3).
+
+    Telegram redelivers the SAME ``update_id`` when it retries a webhook, so a
+    deterministic uuid5 over it means a redelivery hits the pipeline's
+    idempotency check (returns the existing row) instead of minting a fresh
+    uuid4 and creating a duplicate legal record. The PWA (M4) will instead send
+    its own ``crypto.randomUUID()`` per submission.
+    """
+    return uuid5(_TELEGRAM_NS, str(update["update_id"]))
 
 
 async def _handle_update(update: dict) -> None:
@@ -434,159 +459,6 @@ async def _process_message(chat_id: str, message: dict, transaction_id: UUID) ->
         device_timestamp=device_timestamp,
     )
     await container.notifier.send_message(chat_id, await _summary(intervention))
-
-
-def _record_fields(intervention: Intervention) -> dict:
-    """Common record fields (sync, NO I/O), shared by the create response and the
-    list endpoint.
-
-    A focused projection, NOT the raw entity: internal traceability fields
-    (raw_transcription, prompt_version, storage keys) stay out of the API. Field
-    names are English (data identifiers); the PWA maps them to Spanish labels.
-    ``has_pdf`` lets the list show a PDF affordance without signing a URL per row.
-    """
-    dose = intervention.applied_dose or intervention.prescribed_dose
-    return {
-        "id": str(intervention.id),
-        "transaction_id": str(intervention.transaction_id),
-        "lifecycle_state": intervention.lifecycle_state.value,
-        # DB-generated UTC timestamp. The PWA Home groups by day (in
-        # Europe/Madrid) to show "today's" records, so the list needs it; the
-        # device timestamp lives on prescription_date/treatment_date and is not
-        # set for OBSERVATIONs, so created_at is the one date every row carries.
-        "created_at": (
-            intervention.created_at.isoformat() if intervention.created_at else None
-        ),
-        "observation": intervention.observation,
-        "product_registration_number": intervention.product_registration_number,
-        "dose": dose,
-        "dose_unit": intervention.dose_unit,
-        "target_pest": intervention.target_pest,
-        "earliest_harvest_date": (
-            intervention.earliest_harvest_date.isoformat()
-            if intervention.earliest_harvest_date
-            else None
-        ),
-        # Weather captured at execution (None until EXECUTED, or when deferred).
-        # audit_state lets the PWA flag a record whose weather is still pending.
-        "temperature_c": intervention.temperature_c,
-        "relative_humidity_pct": intervention.relative_humidity_pct,
-        "wind_speed_kmh": intervention.wind_speed_kmh,
-        "wind_direction": intervention.wind_direction,
-        "audit_state": intervention.audit_state,
-        # ITEAF inspection expired/unrecorded on the treatment day: a
-        # non-blocking notice the PWA surfaces on executed records.
-        "iteaf_warning": intervention.iteaf_warning,
-        "has_pdf": intervention.prescription_pdf_key is not None,
-    }
-
-
-def _iso(value) -> str | None:
-    """ISO string for a date/datetime, or None. Both have .isoformat()."""
-    return value.isoformat() if value is not None else None
-
-
-def _intervention_detail(
-    intervention: Intervention,
-    plot: Plot | None,
-    holding: Holding | None,
-    equipment: Equipment | None,
-) -> dict:
-    """Full single-record projection for the detail screen: the list fields PLUS
-    the prescription/execution detail, the raw transcription ("lo que dictaste"),
-    and the plot/holding/equipment context. Still a projection — prompt_version
-    and storage keys stay internal. Nested context blocks are None when the
-    related row is missing (e.g. an OBSERVATION has no equipment)."""
-    data = _record_fields(intervention)
-    data.update(
-        {
-            # Prescription block.
-            "prescription_date": _iso(intervention.prescription_date),
-            "planned_date": _iso(intervention.planned_date),
-            "prescribed_dose": intervention.prescribed_dose,
-            "justification": intervention.justification,
-            "previous_alternatives": intervention.previous_alternatives,
-            # Execution block (the real applied data).
-            "treatment_date": _iso(intervention.treatment_date),
-            "applied_dose": intervention.applied_dose,
-            "treated_area_ha": intervention.treated_area_ha,
-            "spray_volume_l_ha": intervention.spray_volume_l_ha,
-            "operator_name": intervention.operator_name,
-            "operator_ropo": intervention.operator_ropo,
-            "delivery_note_number": intervention.delivery_note_number,
-            # Assessment block (Phase 4): how well it worked, when, and why.
-            "effectiveness": (
-                intervention.effectiveness.value
-                if intervention.effectiveness
-                else None
-            ),
-            "effectiveness_date": _iso(intervention.effectiveness_date),
-            "effectiveness_notes": intervention.effectiveness_notes,
-            # What the advisor dictated (audio itself is not persisted yet).
-            "raw_transcription": intervention.raw_transcription,
-            # Context the detail renders (the where, the who, the with-what).
-            "plot": (
-                {
-                    "voice_alias": plot.voice_alias,
-                    "crop": plot.crop,
-                    "variety": plot.variety,
-                    "enclosure_area_ha": plot.enclosure_area_ha,
-                    "sigpac": ":".join(
-                        (
-                            plot.sigpac_province,
-                            plot.sigpac_municipality,
-                            plot.sigpac_polygon,
-                            plot.sigpac_parcel,
-                            plot.sigpac_enclosure,
-                        )
-                    ),
-                }
-                if plot
-                else None
-            ),
-            "holding": (
-                {
-                    "owner_name": holding.owner_name,
-                    "rea_regepa_number": holding.rea_regepa_number,
-                }
-                if holding
-                else None
-            ),
-            "equipment": (
-                {
-                    "equipment_alias": equipment.equipment_alias,
-                    "equipment_type": equipment.equipment_type,
-                    "roma_number": equipment.roma_number,
-                    "iteaf_inspection_date": _iso(equipment.iteaf_inspection_date),
-                }
-                if equipment
-                else None
-            ),
-        }
-    )
-    return data
-
-
-async def _record_response(intervention: Intervention) -> dict:
-    """Create-response: the common fields PLUS a best-effort presigned PDF link.
-
-    Signing is per-record I/O, so it lives here (one record) and NOT in the list
-    endpoint. A signing failure must NOT turn an already-saved record into an
-    error response — we log and return the record without the link.
-    """
-    data = _record_fields(intervention)
-    data["pdf_url"] = None
-    if intervention.prescription_pdf_key:
-        try:
-            data["pdf_url"] = await container.storage.presigned_url(
-                intervention.prescription_pdf_key
-            )
-        except Exception:
-            logger.warning(
-                "No se pudo firmar el enlace del PDF (OSS); respuesta sin enlace",
-                exc_info=True,
-            )
-    return data
 
 
 async def _summary(intervention: Intervention) -> str:
