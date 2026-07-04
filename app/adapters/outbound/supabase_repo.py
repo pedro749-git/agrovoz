@@ -349,16 +349,18 @@ class SupabaseRepository(Repository):
         return [_deserialize(Intervention, row) for row in res.data]
 
     async def list_validations(
-        self, holding_id: UUID, campaign: str
+        self, holding_id: UUID, campaign: str | None = None
     ) -> list[Validation]:
         client = await get_client()
-        res = await _run(
+        query = (
             client.table("validations")
             .select("*")
             .eq("holding_id", str(holding_id))
-            .eq("campaign", campaign)
             .is_("deleted_at", "null")
         )
+        if campaign is not None:
+            query = query.eq("campaign", campaign)
+        res = await _run(query)
         return [_deserialize(Validation, row) for row in res.data]
 
     async def save_validation(self, validation: Validation) -> Validation:
@@ -367,3 +369,39 @@ class SupabaseRepository(Repository):
             client.table("validations").insert(_serialize(validation))
         )
         return _deserialize(Validation, res.data[0])
+
+    async def get_validation(
+        self, validation_id: UUID, advisor_id: UUID
+    ) -> Validation | None:
+        client = await get_client()
+        res = await _run(
+            client.table("validations")
+            .select("*")
+            .eq("id", str(validation_id))
+            .eq("advisor_id", str(advisor_id))  # scope = authorization
+            .is_("deleted_at", "null")
+            .limit(1)
+        )
+        return _deserialize(Validation, res.data[0]) if res.data else None
+
+    async def list_holdings(self, advisor_id: UUID) -> list[Holding]:
+        client = await get_client()
+        res = await _run(
+            client.table("holdings")
+            .select("*")
+            .eq("advisor_id", str(advisor_id))
+            .is_("deleted_at", "null")
+            .order("owner_name", desc=False)
+        )
+        return [_deserialize(Holding, row) for row in res.data]
+
+    async def list_plots(self, holding_id: UUID) -> list[Plot]:
+        client = await get_client()
+        res = await _run(
+            client.table("plots")
+            .select("*")
+            .eq("holding_id", str(holding_id))
+            .is_("deleted_at", "null")
+            .order("voice_alias", desc=False)
+        )
+        return [_deserialize(Plot, row) for row in res.data]

@@ -3,6 +3,27 @@
 One line per decision (taken AND discarded): what · why · date.
 This file becomes the thesis' design chapter.
 
+## 2026-07-04 — M7.3 backend: holdings overview + validation PDF link
+
+- ADDED GET /api/holdings: the advisor's holdings, each with its plots and ALL
+  its validations, for the PWA validation screen. GROUPED BY HOLDING, not by
+  plot — the prototype nests campaigns under a "parcela", but a validation is
+  the HOLDING's (rule 6: records belong to the holding; Validation.holding_id +
+  UNIQUE(holding, campaign, type)). Listing per plot would duplicate the same
+  validation under every plot of a multi-plot holding and mislead the advisor.
+  Each holding shows its plots so it stays recognisable (user's request).
+- The PWA groups the validations by campaign and derives the 0/2 counter
+  CLIENT-SIDE, so the server needs no "current campaign" concept. Made
+  list_validations' campaign param optional (None -> all campaigns) to serve
+  both the duplicate-check (one campaign) and this screen (all).
+- One follow-up read per holding (plots + validations); an advisor has few
+  holdings, same reasoning that keeps the intervention list lean.
+- ADDED GET /api/validations/{id}/pdf: signs the signed-PDF link on demand
+  (list carries has_pdf), scoped to the advisor via a new get_validation — a
+  foreign id or a validation saved without a key (best-effort) is a 404. Mirrors
+  get_intervention_pdf. New repo methods: list_holdings, list_plots,
+  get_validation.
+
 ## 2026-07-03 — M7.2 backend: signed validation PDF (FLUJO C, Phase 5)
 
 - ADDED generate_validation to the PdfGenerator port + ReportLab adapter: a

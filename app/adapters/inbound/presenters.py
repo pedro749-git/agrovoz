@@ -141,8 +141,9 @@ def intervention_detail(
 
 
 def validation_fields(validation: Validation) -> dict:
-    """Projection of a signed campaign validation. The signed PDF link is added
-    on demand elsewhere (M7.2), not here."""
+    """Projection of a signed campaign validation. ``has_pdf`` lets the list show
+    a PDF affordance without signing a URL per row; the presigned link is signed
+    on demand (create response or GET /pdf)."""
     return {
         "id": str(validation.id),
         "holding_id": str(validation.holding_id),
@@ -154,5 +155,25 @@ def validation_fields(validation: Validation) -> dict:
         "period_end": _iso(validation.period_end),
         "intervention_count": validation.intervention_count,
         "remarks": validation.remarks,
+        "has_pdf": validation.validation_pdf_key is not None,
         "created_at": _iso(validation.created_at),
+    }
+
+
+def holding_overview(
+    holding: Holding, plots: list[Plot], validations: list[Validation]
+) -> dict:
+    """A holding with its plots and all its validations — one entry of the PWA
+    validation screen (grouped by holding, rule 6: the validation is the
+    HOLDING's, not a plot's). The PWA groups the validations by campaign and
+    derives the 0/2 counter client-side."""
+    return {
+        "id": str(holding.id),
+        "owner_name": holding.owner_name,
+        "owner_nif": holding.owner_nif,
+        "rea_regepa_number": holding.rea_regepa_number,
+        "plots": [
+            {"voice_alias": p.voice_alias, "crop": p.crop} for p in plots
+        ],
+        "validations": [validation_fields(v) for v in validations],
     }

@@ -359,6 +359,79 @@ def test_create_validation_foreign_holding_404(client, monkeypatch):
     assert r.status_code == 404 and r.json()["error"] == "HOLDING_NOT_FOUND"
 
 
+def test_list_holdings_200(client, monkeypatch):
+    holding = Holding(advisor_id=ADV, owner_name="Pepe García", owner_nif="1X",
+                      rea_regepa_number="REA-1", id=uuid4())
+    plot = Plot(holding_id=holding.id, voice_alias="Finca de Pepe", crop="Limonero",
+                enclosure_area_ha=3.5, sigpac_province="30", sigpac_municipality="1",
+                sigpac_polygon="1", sigpac_parcel="1", sigpac_enclosure="1", id=uuid4())
+    val = _validation(holding_id=holding.id)
+
+    async def fake_holdings(advisor_id):
+        assert advisor_id == ADV
+        return [holding]
+
+    async def fake_plots(holding_id):
+        assert holding_id == holding.id
+        return [plot]
+
+    async def fake_validations(holding_id, campaign=None):
+        assert holding_id == holding.id and campaign is None  # all campaigns
+        return [val]
+
+    monkeypatch.setattr(container.repository, "list_holdings", fake_holdings)
+    monkeypatch.setattr(container.repository, "list_plots", fake_plots)
+    monkeypatch.setattr(container.repository, "list_validations", fake_validations)
+    r = client.get("/api/holdings")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert len(body) == 1
+    assert body[0]["owner_name"] == "Pepe García"
+    assert body[0]["plots"] == [{"voice_alias": "Finca de Pepe", "crop": "Limonero"}]
+    assert body[0]["validations"][0]["type"] == "MID_CYCLE"
+
+
+def test_get_validation_pdf_200(client, monkeypatch):
+    val = _validation(validation_pdf_key="validations/x.pdf")
+
+    async def fake_get(validation_id, advisor_id):
+        assert validation_id == val.id and advisor_id == ADV
+        return val
+
+    async def fake_exists(key):
+        return True
+
+    async def fake_sign(key):
+        assert key == "validations/x.pdf"
+        return "https://oss/signed-val"
+
+    monkeypatch.setattr(container.repository, "get_validation", fake_get)
+    monkeypatch.setattr(container.storage, "exists", fake_exists)
+    monkeypatch.setattr(container.storage, "presigned_url", fake_sign)
+    r = client.get(f"/api/validations/{val.id}/pdf")
+    assert r.status_code == 200 and r.json()["pdf_url"] == "https://oss/signed-val"
+
+
+def test_get_validation_pdf_404_when_no_key(client, monkeypatch):
+    val = _validation()  # saved without a PDF (best-effort render/upload failed)
+
+    async def fake_get(validation_id, advisor_id):
+        return val
+
+    monkeypatch.setattr(container.repository, "get_validation", fake_get)
+    r = client.get(f"/api/validations/{val.id}/pdf")
+    assert r.status_code == 404 and r.json()["error"] == "PDF_NOT_FOUND"
+
+
+def test_get_validation_pdf_404_when_foreign(client, monkeypatch):
+    async def fake_get(validation_id, advisor_id):
+        return None  # not yours / does not exist -> indistinguishable 404
+
+    monkeypatch.setattr(container.repository, "get_validation", fake_get)
+    r = client.get(f"/api/validations/{uuid4()}/pdf")
+    assert r.status_code == 404 and r.json()["error"] == "VALIDATION_NOT_FOUND"
+
+
 def test_post_without_token_401():
     # No dependency override -> the real auth dependency runs; no token -> 401.
     client = TestClient(api.app, raise_server_exceptions=False)

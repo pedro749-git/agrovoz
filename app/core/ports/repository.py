@@ -124,12 +124,32 @@ class Repository(ABC):
 
     @abstractmethod
     async def list_validations(
-        self, holding_id: UUID, campaign: str
+        self, holding_id: UUID, campaign: str | None = None
     ) -> list[Validation]:
-        """A holding's validations for one campaign (0, 1 or 2 rows: MID_CYCLE /
-        FINAL). Lets the service reject a duplicate type and derive the next
-        period start from the latest ``period_end``. Filters ``deleted_at IS NULL``."""
+        """A holding's validations, optionally filtered to one campaign. With a
+        ``campaign`` (0, 1 or 2 rows: MID_CYCLE / FINAL) the service rejects a
+        duplicate type and derives the next period start from the latest
+        ``period_end``. Without it (None) returns ALL campaigns — the PWA groups
+        them per campaign on the validation screen. Filters ``deleted_at IS NULL``."""
 
     @abstractmethod
     async def save_validation(self, validation: Validation) -> Validation:
         """Insert and return the persisted campaign validation (FLUJO C, M7)."""
+
+    @abstractmethod
+    async def get_validation(
+        self, validation_id: UUID, advisor_id: UUID
+    ) -> Validation | None:
+        """A single validation BY id, scoped to its advisor (PWA PDF link). The
+        advisor scope IS the authorization check — you can only open the PDF of
+        your own validation. Filters ``deleted_at IS NULL``."""
+
+    @abstractmethod
+    async def list_holdings(self, advisor_id: UUID) -> list[Holding]:
+        """The advisor's holdings (rule 6: records belong to the holding) — the
+        top level of the PWA validation screen. Filters ``deleted_at IS NULL``."""
+
+    @abstractmethod
+    async def list_plots(self, holding_id: UUID) -> list[Plot]:
+        """A holding's plots — shown under each holding on the validation screen
+        so the advisor recognises it. Filters ``deleted_at IS NULL``."""

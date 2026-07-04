@@ -314,6 +314,27 @@ async def transcribe_audio(
     return JSONResponse(content={"text": text})
 
 
+@app.get("/api/holdings")
+async def list_holdings(
+    advisor_id: UUID = Depends(current_advisor_id),
+) -> JSONResponse:
+    """The advisor's holdings with their plots and validations — the PWA
+    validation screen (M7, grouped by holding: the validation is the HOLDING's,
+    not a plot's, rule 6).
+
+    Scoped to the authenticated advisor. One follow-up read per holding (plots +
+    validations) is fine — an advisor has few holdings, the same reasoning that
+    keeps the intervention list lean and does its extra reads only on the detail.
+    The PWA groups the validations by campaign and derives the 0/2 counter."""
+    holdings = await container.repository.list_holdings(advisor_id)
+    overview = []
+    for holding in holdings:
+        plots = await container.repository.list_plots(holding.id)
+        validations = await container.repository.list_validations(holding.id)
+        overview.append(presenters.holding_overview(holding, plots, validations))
+    return JSONResponse(content=overview)
+
+
 @app.post("/api/holdings/{holding_id}/validations")
 async def create_validation(
     holding_id: UUID,
@@ -343,6 +364,35 @@ async def create_validation(
         remarks=remarks,
     )
     return JSONResponse(content=await _validation_response(validation))
+
+
+@app.get("/api/validations/{validation_id}/pdf")
+async def get_validation_pdf(
+    validation_id: UUID,
+    advisor_id: UUID = Depends(current_advisor_id),
+) -> JSONResponse:
+    """Sign the signed-validation PDF link ON DEMAND (M7.3) — the list carries
+    ``has_pdf`` and this signs the URL only when the advisor opens it, like the
+    prescription PDF.
+
+    Scoped to the authenticated advisor: ``get_validation`` filters by advisor_id,
+    so a foreign id is an indistinguishable 404. A validation whose PDF
+    render/upload failed (saved without a key, best-effort) is also a 404 — there
+    is no document yet. A signing failure surfaces as the 503 from the
+    InfrastructureError handler."""
+    validation = await container.repository.get_validation(validation_id, advisor_id)
+    if validation is None:
+        return _error(404, "VALIDATION_NOT_FOUND", "No encuentro esa validación.")
+    if validation.validation_pdf_key is None:
+        return _error(404, "PDF_NOT_FOUND", "Esta validación no tiene PDF.")
+
+    # The DB key may outlive its object; check before signing so a missing object
+    # is a clean 404, not the provider's raw XML error in the browser.
+    if not await container.storage.exists(validation.validation_pdf_key):
+        return _error(404, "PDF_NOT_FOUND", "El PDF de esta validación no está disponible.")
+
+    url = await container.storage.presigned_url(validation.validation_pdf_key)
+    return JSONResponse(content={"pdf_url": url})
 
 
 async def _record_response(intervention: Intervention) -> dict:
