@@ -10,6 +10,7 @@ suggests) because that name is already the LEGAL validation of the pipeline
 (dose/area); see the decisions log.
 """
 
+import asyncio
 import logging
 from datetime import datetime, timedelta
 from uuid import UUID
@@ -21,8 +22,10 @@ from app.core.domain.errors import (
     RemarksRequiredError,
     ValidationExistsError,
 )
-from app.core.domain.models import Validation, ValidationType
+from app.core.domain.models import Advisor, Holding, Validation, ValidationType
+from app.core.ports.pdf_generator import PdfGenerator
 from app.core.ports.repository import Repository
+from app.core.ports.storage import Storage
 
 logger = logging.getLogger(__name__)
 
@@ -30,8 +33,15 @@ logger = logging.getLogger(__name__)
 class CampaignValidationService:
     """Signs a holding's campaign validation (Phase 5)."""
 
-    def __init__(self, repository: Repository) -> None:
+    def __init__(
+        self,
+        repository: Repository,
+        pdf_generator: PdfGenerator,
+        storage: Storage,
+    ) -> None:
         self._repo = repository
+        self._pdf = pdf_generator
+        self._storage = storage
 
     async def validate_campaign(
         self,
@@ -91,7 +101,7 @@ class CampaignValidationService:
             holding_id, start=period_start, end=period_end
         )
 
-        # 6. Build and persist the signed record.
+        # 6. Build the signed record.
         validation = Validation(
             advisor_id=advisor_id,
             holding_id=holding_id,
@@ -104,4 +114,50 @@ class CampaignValidationService:
             intervention_count=len(interventions),
             remarks=remarks,
         )
+
+        # 7. Render the signed PDF and upload it, so the key is set on the single
+        # INSERT. Best-effort: a render/OSS failure must NOT block the signing —
+        # the PDF is deterministic and can be regenerated from the row later.
+        advisor = await self._repo.get_advisor(advisor_id)
+        validation.validation_pdf_key = await self._store_validation_pdf(
+            validation, advisor, holding
+        )
         return await self._repo.save_validation(validation)
+
+    async def _store_validation_pdf(
+        self, validation: Validation, advisor: Advisor | None, holding: Holding
+    ) -> str | None:
+        """Build the validation PDF and upload it to OSS; return its key (or None
+        on any failure — best-effort, mirrors the prescription PDF in the pipeline).
+
+        The key is deterministic and known before the INSERT
+        (``validations/{holding}_{campaign}_{type}.pdf``); it is unique because
+        the DB enforces UNIQUE(holding, campaign, type). That lets us set the key
+        on the single INSERT instead of saving then updating.
+        """
+        if advisor is None:
+            # The advisor is authenticated and owns the holding, so this should
+            # not happen; if it does, sign without a PDF rather than block.
+            logger.warning(
+                "Advisor %s not found; saving validation without PDF", validation.advisor_id
+            )
+            return None
+        try:
+            # PDF building is pure CPU (no I/O) -> run off the event loop.
+            pdf = await asyncio.to_thread(
+                self._pdf.generate_validation,
+                validation=validation,
+                advisor=advisor,
+                holding=holding,
+            )
+            key = (
+                f"validations/{validation.holding_id}_"
+                f"{validation.campaign}_{validation.type.value}.pdf"
+            )
+            await self._storage.upload(data=pdf, key=key, content_type="application/pdf")
+            return key
+        except Exception:
+            # PDF render OR OSS upload failed: sign the record anyway. The
+            # traceback tells you which; the PDF can be regenerated from the row.
+            logger.exception("Validation PDF render/upload failed; saving without PDF")
+            return None

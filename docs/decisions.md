@@ -3,6 +3,35 @@
 One line per decision (taken AND discarded): what · why · date.
 This file becomes the thesis' design chapter.
 
+## 2026-07-03 — M7.2 backend: signed validation PDF (FLUJO C, Phase 5)
+
+- ADDED generate_validation to the PdfGenerator port + ReportLab adapter: a
+  Spanish conformity document (asesor · explotación · campaña/periodo/nº
+  intervenciones/CONFORME-NO CONFORME/observaciones · firma), reusing the
+  prescription's _section/_v/_fmt_* helpers. Content is the SUMMARY the row
+  already holds — no per-intervention table (the simple thing that works; a
+  table can come later if a validation ever needs to itemise the actuaciones).
+- ADDED type-label + conformity mapping to Spanish in the adapter (MID_CYCLE ->
+  "Intermedia", FINAL -> "Final de campaña"; True -> CONFORME). The enum stays
+  English in code; the legal PDF is Spanish.
+- CampaignValidationService now renders + uploads the PDF and sets
+  validation_pdf_key on the SINGLE insert. Key is deterministic and known
+  pre-save: validations/{holding}_{campaign}_{type}.pdf — unique because the DB
+  enforces UNIQUE(holding, campaign, type). This avoids the save-then-update the
+  prescription needs (its key uses transaction_id; a validation has none, and
+  the row id is DB-generated / not serialized on insert).
+- BEST-EFFORT like the prescription PDF (hard rule 8 spirit): a render/OSS
+  failure logs + saves the validation without a key (the PDF is deterministic,
+  regenerable from the row) — never blocks the signing. The advisor being
+  absent (should not happen; they're authenticated) also just skips the PDF.
+- The create response signs the link best-effort via a new _validation_response
+  in api.py (mirrors _record_response — it does I/O, so it stays out of the pure
+  presenters). The standalone GET /pdf endpoint is deferred to M7.3 (the PWA
+  list will need it for pre-existing validations; nothing consumes it yet).
+- Coverage: the service tests use a FakePdf, so ADDED a ReportLab smoke test
+  (renders %PDF, tolerates remarks=None) — otherwise the real render had zero
+  automated coverage — plus a manual generate_sample_validation.py to eyeball it.
+
 ## 2026-07-03 — Refactor: split JSON presenters out of api.py
 
 - api.py had grown to 630 lines. MOVED the pure JSON-shaping helpers

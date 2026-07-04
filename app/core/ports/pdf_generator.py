@@ -9,6 +9,7 @@ from app.core.domain.models import (
     Intervention,
     Plot,
     Product,
+    Validation,
 )
 
 
@@ -35,3 +36,18 @@ class PdfGenerator(ABC):
         equipment: Equipment | None = None,
     ) -> bytes:
         """Return the prescription PDF (RD 1311/2012, Annex III) as bytes."""
+
+    @abstractmethod
+    def generate_validation(
+        self,
+        *,
+        validation: Validation,
+        advisor: Advisor,
+        holding: Holding,
+    ) -> bytes:
+        """Return the advisor's signed campaign-validation PDF as bytes (M7).
+
+        A conformity document over a holding's interventions in a period: the
+        campaign, the period covered, the intervention count, the conformity
+        verdict and remarks. Deterministic (built only from the persisted rows),
+        so it can be regenerated if the OSS upload ever fails."""

@@ -26,7 +26,12 @@ from app.adapters.outbound.telegram import download_voice
 from app.config import container
 from app.config.settings import settings
 from app.core.domain.errors import DomainError, InfrastructureError
-from app.core.domain.models import Effectiveness, Intervention, ValidationType
+from app.core.domain.models import (
+    Effectiveness,
+    Intervention,
+    Validation,
+    ValidationType,
+)
 from app.core.domain.states import LifecycleState
 
 logger = logging.getLogger(__name__)
@@ -337,7 +342,7 @@ async def create_validation(
         validation_date=validation_date,
         remarks=remarks,
     )
-    return JSONResponse(content=presenters.validation_fields(validation))
+    return JSONResponse(content=await _validation_response(validation))
 
 
 async def _record_response(intervention: Intervention) -> dict:
@@ -359,6 +364,28 @@ async def _record_response(intervention: Intervention) -> dict:
         except Exception:
             logger.warning(
                 "No se pudo firmar el enlace del PDF (OSS); respuesta sin enlace",
+                exc_info=True,
+            )
+    return data
+
+
+async def _validation_response(validation: Validation) -> dict:
+    """Create-response for a campaign validation: the projection PLUS a
+    best-effort presigned link to the signed PDF. Mirrors ``_record_response`` —
+    a signing failure (or a validation saved without a key because its PDF
+    render/upload failed) must NOT turn an already-saved validation into an
+    error; we log and return it without the link."""
+    data = presenters.validation_fields(validation)
+    data["pdf_url"] = None
+    if validation.validation_pdf_key:
+        try:
+            data["pdf_url"] = await container.storage.presigned_url(
+                validation.validation_pdf_key
+            )
+        except Exception:
+            logger.warning(
+                "No se pudo firmar el enlace del PDF de validación (OSS); "
+                "respuesta sin enlace",
                 exc_info=True,
             )
     return data

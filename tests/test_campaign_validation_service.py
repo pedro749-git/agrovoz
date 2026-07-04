@@ -18,7 +18,13 @@ from app.core.domain.errors import (
     RemarksRequiredError,
     ValidationExistsError,
 )
-from app.core.domain.models import Holding, Intervention, Validation, ValidationType
+from app.core.domain.models import (
+    Advisor,
+    Holding,
+    Intervention,
+    Validation,
+    ValidationType,
+)
 from app.core.domain.states import LifecycleState
 from app.core.services.campaign_validation_service import CampaignValidationService
 
@@ -27,6 +33,9 @@ OTHER_ADV = UUID("22222222-2222-2222-2222-222222222222")
 HOLD = uuid4()
 CAMPAIGN = "2026"
 SIGNED_AT = datetime(2026, 6, 30, 10, 0, tzinfo=timezone.utc)
+ADVISOR = Advisor(
+    full_name="Ana Asesora", dni="00000000T", ropo_number="ROPO-1", id=ADV
+)
 
 
 def _holding(**overrides) -> Holding:
@@ -77,15 +86,20 @@ class FakeRepo:
         *,
         validations: list[Validation] | None = None,
         interventions: list[Intervention] | None = None,
+        advisor: Advisor | None = ADVISOR,
     ):
         self._holding = holding
         self._validations = validations or []
         self._interventions = interventions or []
+        self._advisor = advisor
         self.saved: Validation | None = None
         self.period_asked: tuple[date, date] | None = None
 
     async def get_holding(self, holding_id):
         return self._holding
+
+    async def get_advisor(self, advisor_id):
+        return self._advisor
 
     async def list_validations(self, holding_id, campaign):
         return self._validations
@@ -100,8 +114,34 @@ class FakeRepo:
         return validation
 
 
-def _validate(repo, **kwargs):
-    service = CampaignValidationService(repo)
+class FakePdf:
+    """Records the validation it was asked to render; returns dummy PDF bytes."""
+
+    def __init__(self):
+        self.called_with: Validation | None = None
+
+    def generate_validation(self, *, validation, advisor, holding):
+        self.called_with = validation
+        return b"%PDF-1.4 fake"
+
+
+class FakeStorage:
+    """Records uploads; can be told to fail to exercise the best-effort path."""
+
+    def __init__(self, *, fail: bool = False):
+        self.fail = fail
+        self.uploaded_key: str | None = None
+
+    async def upload(self, *, data, key, content_type):
+        if self.fail:
+            raise RuntimeError("OSS down")
+        self.uploaded_key = key
+
+
+def _validate(repo, *, pdf=None, storage=None, **kwargs):
+    service = CampaignValidationService(
+        repo, pdf or FakePdf(), storage or FakeStorage()
+    )
     params = dict(
         holding_id=HOLD,
         advisor_id=ADV,
@@ -188,3 +228,26 @@ def test_malformed_campaign_is_rejected():
     with pytest.raises(InvalidCampaignError):
         _validate(repo, campaign="campaña")
     assert repo.saved is None
+
+
+def test_pdf_rendered_uploaded_and_key_set():
+    # The signed PDF is rendered, uploaded, and its deterministic key is on the
+    # saved row (single INSERT, no follow-up update).
+    repo = FakeRepo(_holding())
+    pdf, storage = FakePdf(), FakeStorage()
+    result = _validate(repo, pdf=pdf, storage=storage)
+
+    expected_key = f"validations/{HOLD}_{CAMPAIGN}_MID_CYCLE.pdf"
+    assert pdf.called_with is result  # rendered from the built validation
+    assert storage.uploaded_key == expected_key
+    assert result.validation_pdf_key == expected_key
+
+
+def test_pdf_upload_failure_is_best_effort():
+    # A storage failure must NOT block the signing: the validation is saved with
+    # no key (the PDF is regenerable from the row).
+    repo = FakeRepo(_holding())
+    result = _validate(repo, storage=FakeStorage(fail=True))
+
+    assert result.validation_pdf_key is None
+    assert repo.saved is result  # still persisted

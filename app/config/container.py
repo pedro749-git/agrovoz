@@ -32,4 +32,6 @@ execution_service = ExecutionService(
     repository, weather, settings.iteaf_validity_years
 )
 assessment_service = AssessmentService(repository)
-campaign_validation_service = CampaignValidationService(repository)
+campaign_validation_service = CampaignValidationService(
+    repository, pdf_generator, storage
+)

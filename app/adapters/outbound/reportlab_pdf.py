@@ -21,8 +21,16 @@ from app.core.domain.models import (
     Intervention,
     Plot,
     Product,
+    Validation,
+    ValidationType,
 )
 from app.core.ports.pdf_generator import PdfGenerator
+
+# Spanish labels for the validation PDF (legal document -> user-facing Spanish).
+_VALIDATION_TYPE_LABEL = {
+    ValidationType.MID_CYCLE: "Intermedia (durante el ciclo)",
+    ValidationType.FINAL: "Final (cierre de campaña)",
+}
 
 _MADRID = ZoneInfo("Europe/Madrid")
 _UTC = ZoneInfo("UTC")
@@ -133,6 +141,61 @@ class ReportLabPdfGenerator(PdfGenerator):
         story += self._section("Fechas", [
             ("Fecha de prescripción", _fmt_datetime(intervention.prescription_date)),
             ("Fecha prevista de aplicación", _fmt_date(intervention.planned_date)),
+        ])
+        story.append(Spacer(1, 1.2 * cm))
+        story.append(Paragraph(
+            "Firma del asesor: ____________________________", self._value
+        ))
+
+        doc.build(story)
+        return buffer.getvalue()
+
+    def generate_validation(
+        self,
+        *,
+        validation: Validation,
+        advisor: Advisor,
+        holding: Holding,
+    ) -> bytes:
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(
+            buffer, pagesize=A4,
+            topMargin=2 * cm, bottomMargin=2 * cm,
+            leftMargin=2 * cm, rightMargin=2 * cm,
+            title="Validación de registros fitosanitarios",
+        )
+
+        period = f"{_fmt_date(validation.period_start)} – {_fmt_date(validation.period_end)}"
+        conformity = "CONFORME" if validation.conformity else "NO CONFORME"
+        type_label = _VALIDATION_TYPE_LABEL.get(validation.type, _v(validation.type))
+
+        story: list = [
+            Paragraph("VALIDACIÓN DE REGISTROS FITOSANITARIOS", self._title),
+            Paragraph(
+                "Conformidad del asesor GIP sobre el cuaderno de la explotación "
+                "— RD 1311/2012",
+                self._subtitle,
+            ),
+            Spacer(1, 0.6 * cm),
+        ]
+        story += self._section("Asesor (técnico GIP)", [
+            ("Nombre y apellidos", _v(advisor.full_name)),
+            ("DNI", _v(advisor.dni)),
+            ("Nº ROPO (asesoramiento)", _v(advisor.ropo_number)),
+        ])
+        story += self._section("Explotación", [
+            ("Titular", _v(holding.owner_name)),
+            ("NIF", _v(holding.owner_nif)),
+            ("Nº REA/REGEPA", _v(holding.rea_regepa_number)),
+        ])
+        story += self._section("Validación", [
+            ("Campaña", _v(validation.campaign)),
+            ("Tipo", type_label),
+            ("Periodo validado", period),
+            ("Nº de intervenciones", _v(validation.intervention_count)),
+            ("Resultado", conformity),
+            ("Observaciones", _v(validation.remarks)),
+            ("Fecha de la validación", _fmt_datetime(validation.validation_date)),
         ])
         story.append(Spacer(1, 1.2 * cm))
         story.append(Paragraph(

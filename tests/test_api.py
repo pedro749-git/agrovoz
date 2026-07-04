@@ -296,8 +296,32 @@ def test_create_validation_200(client, monkeypatch):
     body = r.json()
     assert body["type"] == "MID_CYCLE"
     assert body["intervention_count"] == 3
+    # No PDF key on the returned validation -> no link, no OSS call.
+    assert body["pdf_url"] is None
     # The enum is parsed at the boundary before reaching the service.
     assert captured["validation_type"].value == "MID_CYCLE"
+
+
+def test_create_validation_signs_pdf_url_when_key_present(client, monkeypatch):
+    # A validation saved with a PDF key -> the response carries a presigned link.
+    val = _validation(validation_pdf_key="validations/x.pdf")
+
+    class FakeService:
+        async def validate_campaign(self, **kwargs):
+            return val
+
+    async def fake_sign(key):
+        assert key == "validations/x.pdf"
+        return "https://oss.example/signed"
+
+    monkeypatch.setattr(container, "campaign_validation_service", FakeService())
+    monkeypatch.setattr(container.storage, "presigned_url", fake_sign)
+    r = client.post(
+        f"/api/holdings/{uuid4()}/validations",
+        data={"campaign": "2026", "validation_type": "FINAL",
+              "conformity": "true", "validation_date": "2026-06-30T10:00:00Z"})
+    assert r.status_code == 200, r.text
+    assert r.json()["pdf_url"] == "https://oss.example/signed"
 
 
 def test_create_validation_bad_type_422(client):
