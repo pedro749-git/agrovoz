@@ -37,8 +37,8 @@ ENV/
 # -----------------------------
 # Artefactos generados (PDFs de muestra para revisar a ojo)
 # -----------------------------
-sample_prescription.pdf
-
+sample_*.pdf
+test_runner_pedro.html
 # -----------------------------
 # Editores de código y SO
 # -----------------------------
