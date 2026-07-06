@@ -2,12 +2,10 @@
 
 Audio -> transcription -> extracted JSON -> legal validation -> Supabase row.
 Depends only on ports (Transcriber, Extractor, Repository), so it is transport
-agnostic: the Telegram webhook today and the PWA tomorrow call the same method.
+agnostic: the PWA REST API calls this same method.
 
-Notification is intentionally NOT done here — how to answer is transport
-specific (a Telegram message vs an HTTP 422 JSON). The pipeline RAISES typed
-domain errors and RETURNS the persisted intervention; the inbound adapter
-decides how to surface that.
+The pipeline RAISES typed domain errors and RETURNS the persisted intervention;
+the inbound adapter decides how to surface that (an HTTP 422 JSON for the PWA).
 """
 
 import asyncio

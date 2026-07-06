@@ -60,8 +60,8 @@ async def current_advisor_id(
 ) -> UUID:
     """FastAPI dependency: a verified Bearer token -> the caller's advisor id.
 
-    Replaces the M2 ``default_advisor_id`` stand-in — every record is now
-    attributed to the authenticated advisor.
+    Every record is attributed to the authenticated advisor (from the verified
+    Supabase JWT's ``sub``), never a seeded stand-in.
     """
     if credentials is None:
         raise AuthError("Falta el token de autenticación.")

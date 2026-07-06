@@ -60,7 +60,7 @@ and `docs/` stay at the repo root.
 app/
   core/
     domain/      models.py · schemas.py (Pydantic V2) · states.py · errors.py
-    ports/       transcriber.py · extractor.py · repository.py · notifier.py
+    ports/       transcriber.py · extractor.py · repository.py
                  storage.py · weather.py · pdf_generator.py  (ABCs, added on demand)
     services/    registration_pipeline.py · execution_service.py
                  validation_service.py

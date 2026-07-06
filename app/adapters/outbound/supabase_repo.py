@@ -1,9 +1,9 @@
 """Supabase adapter implementing the Repository port.
 
-Uses the service_role key, which bypasses RLS — correct for M2, where the
-inbound is the trusted backend (Telegram stand-in has no Supabase Auth JWT).
-The RLS policies in the migration protect the future PWA path (M4+), where
-each advisor authenticates with an email OTP code or password.
+Uses the service_role key, which bypasses RLS — the inbound is the trusted
+backend that has already verified the advisor's Supabase JWT. The RLS policies
+in the migration back the PWA path (M4+), where each advisor authenticates with
+an email OTP code or password.
 
 Every read filters ``deleted_at IS NULL`` (hard rule 1: soft-delete only).
 """

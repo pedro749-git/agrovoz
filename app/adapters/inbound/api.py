@@ -1,38 +1,23 @@
 """Inbound FastAPI app.
 
-Two inbound routes over the SAME core pipeline:
-- the PWA REST API (the live inbound, M4+): synchronous JSON endpoints the
-  advisor's UI awaits — FLUJO A (record), B (execution) and C (assessment /
-  campaign validation);
-- the Telegram webhook (legacy M1, replaced by the PWA): ACKs immediately
-  (Telegram retries on timeout), processes in the background and replies through
-  the Notifier port. Kept for reference; not used by the product.
+The PWA REST API (M4+): synchronous JSON endpoints the advisor's UI awaits —
+FLUJO A (record), B (execution) and C (assessment / campaign validation).
 
 The file is laid out in sections (see the banner comments): app + error shape,
-exception handlers, health, the PWA REST API, and the legacy Telegram path. JSON
-shaping lives in ``presenters`` — this module is routing + error mapping.
+exception handlers, health, and the PWA REST API. JSON shaping lives in
+``presenters`` — this module is routing + error mapping.
 """
 
 import logging
 from datetime import date, datetime, time, timedelta, timezone
-from uuid import UUID, uuid5
+from uuid import UUID
 from zoneinfo import ZoneInfo
 
-from fastapi import (
-    BackgroundTasks,
-    Depends,
-    FastAPI,
-    File,
-    Form,
-    Query,
-    Request,
-    UploadFile,
-)
+from fastapi import Depends, FastAPI, File, Form, Query, Request, UploadFile
 from fastapi.responses import JSONResponse
 
 from app.adapters.inbound import presenters
 from app.adapters.inbound.auth import AuthError, current_advisor_id
-from app.adapters.outbound.telegram import download_voice
 from app.config import container
 from app.config.settings import settings
 from app.core.domain.errors import DomainError, InfrastructureError
@@ -78,8 +63,7 @@ async def _domain_error_handler(_: Request, exc: DomainError) -> JSONResponse:
 
     The error message IS the user feedback (it is written in Spanish at the
     raise site), so it goes straight into ``mensaje``. Registered on the app
-    once so every HTTP route shares one policy — the Telegram webhook keeps its
-    own try/except because it answers over chat, not HTTP.
+    once so every HTTP route shares one policy.
     """
     status = 404 if exc.code in _NOT_FOUND_CODES else 422
     return _error(status, exc.code, str(exc))
@@ -110,7 +94,7 @@ async def _unexpected_error_handler(_: Request, exc: Exception) -> JSONResponse:
     serialization bug, etc. Provider failures ARE translated (Qwen/OSS ->
     InfrastructureError, Supabase -> RepositoryError), so this should fire only
     on genuine bugs. Returns a clean 500 in our shape instead of FastAPI's
-    default and logs the traceback. Mirrors the Telegram webhook's catch-all.
+    default and logs the traceback.
     More specific handlers above still win — FastAPI dispatches by exception
     type, not registration order.
     """
@@ -142,8 +126,8 @@ async def create_record(
 ) -> JSONResponse:
     """FLUJO A for the PWA: an audio note -> persisted intervention (spec §7).
 
-    Unlike the Telegram webhook this is SYNCHRONOUS: the advisor's UI waits for
-    the outcome (a saved record to list, or a 422 dose/area error to show), so we
+    This is SYNCHRONOUS: the advisor's UI waits for the outcome (a saved record
+    to list, or a 422 dose/area error to show), so we
     process inline and let the registered exception handlers translate any
     failure into the {"error", "mensaje"} shape.
 
@@ -474,141 +458,3 @@ async def _validation_response(validation: Validation) -> dict:
                 exc_info=True,
             )
     return data
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# Telegram webhook — legacy M1 path, replaced by the PWA (kept for reference)
-# ══════════════════════════════════════════════════════════════════════════════
-
-# Fixed namespace to derive deterministic idempotency keys from Telegram
-# updates (any constant UUID works; it just must never change).
-_TELEGRAM_NS = UUID("9e3a7c1f-5b2d-4e8a-bf6c-1d2e3f4a5b6c")
-
-
-@app.post("/telegram/webhook")
-async def telegram_webhook(request: Request, background: BackgroundTasks) -> dict:
-    update = await request.json()
-    # ACK now; the heavy work (download + Qwen + DB) runs after responding.
-    background.add_task(_handle_update, update)
-    return {"ok": True}
-
-
-def _transaction_id(update: dict) -> UUID:
-    """Stable idempotency key for a Telegram update (hard rule 3).
-
-    Telegram redelivers the SAME ``update_id`` when it retries a webhook, so a
-    deterministic uuid5 over it means a redelivery hits the pipeline's
-    idempotency check (returns the existing row) instead of minting a fresh
-    uuid4 and creating a duplicate legal record. The PWA (M4) will instead send
-    its own ``crypto.randomUUID()`` per submission.
-    """
-    return uuid5(_TELEGRAM_NS, str(update["update_id"]))
-
-
-async def _handle_update(update: dict) -> None:
-    """Route the update and apply ONE error policy over the whole processing.
-
-    Runs in a BackgroundTask, so any unhandled error would die silently. Only
-    the chat_id extraction lives outside the safety net: without a sender there
-    is nobody to reply to, so we just log and drop the update.
-    """
-    message = update.get("message")
-    if not message:
-        return
-    try:
-        chat_id = str(message["from"]["id"])
-    except (KeyError, TypeError):
-        logger.warning("Update without a usable sender id; dropping it")
-        return
-
-    try:
-        await _process_message(chat_id, message, _transaction_id(update))
-    except DomainError as exc:
-        # Spanish, agronomist-readable (the error message is the user feedback).
-        await container.notifier.send_message(chat_id, f"⚠️ {exc}")
-    except InfrastructureError:
-        # A provider failure an adapter translated (Qwen, OSS, ...).
-        logger.exception("Infrastructure failure handling Telegram update")
-        await container.notifier.send_message(
-            chat_id, "❌ Fallo técnico procesando el audio. Inténtalo de nuevo."
-        )
-    except Exception:
-        # Catch-all safety net: covers untranslated errors (raw httpx download,
-        # a KeyError on a weird update) and any unexpected bug. Supabase failures
-        # are now RepositoryError -> caught above as InfrastructureError.
-        # logger.exception writes the full traceback — this is how you actually
-        # see *why* it failed.
-        logger.exception("Unexpected error handling Telegram update")
-        await container.notifier.send_message(
-            chat_id, "❌ Error inesperado. Inténtalo de nuevo."
-        )
-
-
-async def _process_message(chat_id: str, message: dict, transaction_id: UUID) -> None:
-    """Linear happy path. Any failure here is caught by _handle_update."""
-    if "voice" not in message:
-        await container.notifier.send_message(
-            chat_id, "Envíame una nota de voz con el registro de campo."
-        )
-        return
-
-    if settings.default_advisor_id is None:
-        await container.notifier.send_message(
-            chat_id, "Configuración pendiente: falta DEFAULT_ADVISOR_ID."
-        )
-        return
-
-    # M2 stand-in: device timestamp = Telegram's message date (hard rule 2).
-    # transaction_id is derived from the update by the caller (hard rule 3).
-    device_timestamp = datetime.fromtimestamp(message["date"], tz=timezone.utc)
-
-    await container.notifier.send_message(chat_id, "🎙️ Audio recibido, procesando…")
-    audio = await download_voice(message["voice"]["file_id"])
-    intervention = await container.pipeline.register(
-        audio=audio,
-        advisor_id=settings.default_advisor_id,
-        transaction_id=transaction_id,
-        device_timestamp=device_timestamp,
-    )
-    await container.notifier.send_message(chat_id, await _summary(intervention))
-
-
-async def _summary(intervention: Intervention) -> str:
-    """Spanish confirmation of what was persisted."""
-    if intervention.lifecycle_state is LifecycleState.OBSERVATION:
-        return f"👁️ Observación registrada.\n{intervention.observation or ''}".strip()
-
-    verb = (
-        "Prescripción registrada"
-        if intervention.lifecycle_state is LifecycleState.PRESCRIBED
-        else "Ejecución registrada"
-    )
-    dose = intervention.applied_dose or intervention.prescribed_dose
-    lines = [
-        f"✅ {verb}.",
-        f"Producto: {intervention.product_registration_number}",
-        f"Dosis: {dose} {intervention.dose_unit or ''}".strip(),
-        f"Plaga: {intervention.target_pest}",
-    ]
-    if intervention.earliest_harvest_date:
-        lines.append(f"Cosecha no antes de: {intervention.earliest_harvest_date}")
-
-    # Presigned link to the prescription PDF (private bucket, 1h expiry). A
-    # signing failure must not swallow the confirmation — the record is saved.
-    if intervention.prescription_pdf_key:
-        try:
-            url = await container.storage.presigned_url(
-                intervention.prescription_pdf_key
-            )
-            lines.append(f"📄 Prescripción (PDF, caduca en 1h): {url}")
-        except InfrastructureError:
-            # OSS signing failed (expected-ish): just omit the link.
-            logger.warning("No se pudo firmar el enlace del PDF (OSS); confirmación sin enlace")
-        except Exception:
-            # Anything unexpected must NOT turn an already-saved record into an
-            # error message: log with traceback and still send the confirmation.
-            logger.warning(
-                "Error inesperado firmando el enlace del PDF; confirmación sin enlace",
-                exc_info=True,
-            )
-    return "\n".join(lines)

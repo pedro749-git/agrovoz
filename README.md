@@ -69,15 +69,15 @@ app/
                services/ (registration_pipeline = FLUJO A · execution_service =
                           FLUJO B · assessment_service = FLUJO C ·
                           campaign_validation_service · validation_service)
-  adapters/    inbound/  api.py (FastAPI: PWA + Telegram webhook)
+  adapters/    inbound/  api.py (FastAPI: PWA REST API)
                outbound/ qwen.py · supabase_repo.py · oss_storage.py ·
-                         reportlab_pdf.py · open_meteo_weather.py · telegram.py
+                         reportlab_pdf.py · open_meteo_weather.py
   config/      settings.py · container.py (composition root) · .env
 pwa/           React + Vite + Tailwind + vite-plugin-pwa (M4+ client)
 ```
 
-The core depends only on ports (ABCs): the Telegram webhook and the PWA both call
-the **same** pipeline (`POST /api/records`) without touching business logic.
+The core depends only on ports (ABCs): the inbound adapter (the PWA REST API)
+calls the pipeline (`POST /api/records`) without touching business logic.
 
 ## Local setup and run
 
@@ -89,9 +89,8 @@ uv sync
 **2. Configure the keys**
 ```bash
 cp app/config/.env.example app/config/.env
-# Fill in by hand: TELEGRAM_TOKEN, SUPABASE_URL/SERVICE_KEY, DASHSCOPE_API_KEY,
-# OSS_* and DEFAULT_ADVISOR_ID (the UUID of an ACTIVE advisor you have seeded in
-# Supabase). The .env is never committed.
+# Fill in by hand: SUPABASE_URL/SERVICE_KEY, DASHSCOPE_API_KEY and OSS_*.
+# The .env is never committed.
 ```
 
 **3. Start the server** (port 8000, auto-reload)
@@ -100,26 +99,8 @@ uv run uvicorn app.adapters.inbound.api:app --host 127.0.0.1 --port 8000 --reloa
 ```
 Quick check: `curl http://127.0.0.1:8000/health` → `{"status":"ok"}`.
 
-**4. Expose the server to the internet** (in another terminal)
-```bash
-ngrok http 8000
-```
-*(Copy the public `https://…` URL it generates.)*
-
-**5. Connect the Telegram webhook**
-```bash
-curl -X POST "https://api.telegram.org/bot<TELEGRAM_TOKEN>/setWebhook" \
-     -H "Content-Type: application/json" \
-     -d '{"url": "https://<NGROK_URL>/telegram/webhook"}'
-```
-
-Done: send a **voice note** to the bot and it replies with the persisted record.
-
-> **Telegram is the M2 stand-in and does exactly one thing: register an
-> intervention** (audio → persisted record + PDF). It has no per-advisor
-> authentication, no records list and no on-demand PDF download — all of that
-> lives **only in the PWA** (M4). Telegram is kept as a quick way to exercise the
-> pipeline; the real client is the PWA.
+The backend has no UI of its own — the client is the PWA (next section), which
+calls this server over `/api/...`.
 
 ## PWA (M4)
 
@@ -149,13 +130,7 @@ today's list.
 
 ## Safe shutdown
 
-**Backend / Telegram** — keep Telegram from blocking the bot over retries against
-a dead URL:
-
-```bash
-curl -X POST "https://api.telegram.org/bot<TELEGRAM_TOKEN>/deleteWebhook"
-```
-Then stop Uvicorn (`Ctrl + C`) and Ngrok (`Ctrl + C`).
+**Backend** — just stop Uvicorn (`Ctrl + C`).
 
 **PWA** — just `Ctrl + C` in both terminals: the tunnel (`cloudflared`) first,
 then Vite (`npm run dev`). Closing the tunnel destroys the `trycloudflare.com`

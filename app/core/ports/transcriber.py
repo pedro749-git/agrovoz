@@ -12,4 +12,4 @@ class Transcriber(ABC):
 
     @abstractmethod
     async def transcribe(self, audio: bytes) -> str:
-        """audio: the voice file bytes as received (OGG from Telegram)."""
+        """audio: the recorded voice-note bytes as received (WebM from the PWA)."""

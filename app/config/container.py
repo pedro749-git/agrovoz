@@ -10,7 +10,6 @@ from app.adapters.outbound.oss_storage import OssStorage
 from app.adapters.outbound.qwen import QwenExtractor, QwenTranscriber
 from app.adapters.outbound.reportlab_pdf import ReportLabPdfGenerator
 from app.adapters.outbound.supabase_repo import SupabaseRepository
-from app.adapters.outbound.telegram import TelegramNotifier
 from app.config.settings import settings
 from app.core.services.assessment_service import AssessmentService
 from app.core.services.campaign_validation_service import CampaignValidationService
@@ -20,7 +19,6 @@ from app.core.services.registration_pipeline import RegistrationPipeline
 transcriber = QwenTranscriber()
 extractor = QwenExtractor()
 repository = SupabaseRepository()
-notifier = TelegramNotifier()
 pdf_generator = ReportLabPdfGenerator()
 storage = OssStorage()
 weather = OpenMeteoWeather()

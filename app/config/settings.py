@@ -1,15 +1,7 @@
-from uuid import UUID
-
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
-    # Telegram
-    telegram_token: SecretStr
-    # M2 stand-in: Telegram has no auth, so every audio is attributed to this
-    # seeded advisor. Removed in M4 when the PWA authenticates per advisor.
-    default_advisor_id: UUID | None = None
-
     # Supabase
     supabase_url: str
     supabase_service_key: SecretStr
