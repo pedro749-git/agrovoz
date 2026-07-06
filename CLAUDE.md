@@ -35,8 +35,8 @@ rule: **each milestone must work end-to-end before starting the next.**
       confirmation (FLUJO B: real dose/area/spray/operator, re-validated) +
       weather at execution via Open-Meteo (WEATHER_PENDING fallback) + ITEAF
       expiry warning + PWA list→detail screen with actions on the detail
-- [ ] M6 — Effectiveness assessment + delivery-note number
-- [ ] M7 — Campaign validations (signed PDF)
+- [x] M6 — Effectiveness assessment + delivery-note number
+- [x] M7 — Campaign validations (signed PDF)
 
 **Update this checklist when a milestone is completed.** If the user asks for
 something from a future milestone, point it out and ask before implementing.

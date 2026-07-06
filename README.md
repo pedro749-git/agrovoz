@@ -1,176 +1,189 @@
-# Asesor GIP — middleware de voz para registros fitosanitarios
+# GIP Advisor — voice middleware for phytosanitary records
 
-El asesor dicta una nota de voz en campo (*"Finca de Pepe, Abamectina 1,5 litros
-por hectárea, araña roja, tractor"*) y el sistema genera el registro fitosanitario
-legalmente válido: transcripción (Qwen-Audio) → extracción de campos a JSON
-(Qwen Instruct) → validación legal → Supabase (PostgreSQL) → PDF oficial.
+The advisor dictates a short voice note in the field (*"Finca de Pepe, Abamectina
+1,5 litros por hectárea, araña roja, tractor"*) and the system produces the
+legally valid phytosanitary record: transcription (Qwen-Audio) → field extraction
+to JSON (Qwen Instruct) → legal validation → Supabase (PostgreSQL) → official PDF.
 
-Contexto legal: RD 1311/2012 (Anexo III) y Reglamento UE 2023/564. El registro
-fitosanitario electrónico es obligatorio en España desde el 2027-01-01.
+Legal context: Spanish RD 1311/2012 (Annex III) and EU Regulation 2023/564.
+Electronic phytosanitary records become mandatory in Spain on 2027-01-01.
 
-> Proyecto de TFG. La especificación completa está en `docs/mvp_asesor_gip_v3.md`.
+> Bachelor's thesis (TFG). The full specification lives in
+> `docs/mvp_asesor_gip_v3.md` (in Spanish — the domain is Spanish-regulatory).
 
-## Estado actual
+## Current status
 
-Se construye en hitos incrementales; cada uno funciona de punta a punta antes
-de empezar el siguiente.
+Built in incremental milestones; each one works end-to-end before the next
+begins.
 
-- [x] **M1** — Spike: audio → JSON por consola (validar que Qwen entiende a un
-      asesor de campo). Desechable, archivado en `docs/historico/spike_main.py`.
-- [x] **M2** — **Probado end-to-end.** Nota de voz de Telegram → transcripción +
-      extracción con Qwen → validación legal → fila persistida en Supabase.
-      Arquitectura hexagonal (núcleo + puertos + adaptadores), búsqueda difusa de
-      parcela/producto/equipo por alias dictado.
-- [x] **M3** — **Probado end-to-end.** PDF de prescripción (ReportLab) + subida a
-      Alibaba Cloud OSS, con enlace firmado (caduca en 1h) descargado desde el móvil.
-- [x] **M4** — **Probado en un móvil real.** PWA instalable (React + Vite +
-      Tailwind): login por código de acceso al email (o contraseña), botón de grabación, subida del
-      audio al mismo pipeline, lista de registros de hoy y descarga del PDF bajo
-      demanda.
-- [x] **M5** — Máquina de estados (OBSERVATION / PRESCRIBED → EXECUTED) +
-      confirmación de ejecución (FLUJO B: dosis/área/caldo/aplicador reales,
-      revalidadas) + clima capturado en la fecha real vía Open-Meteo (con
-      `WEATHER_PENDING` si falla) + aviso de caducidad de la inspección ITEAF +
-      pantalla de detalle en la PWA (lista → detalle, con las acciones en el detalle).
-- [x] **M6** — Evaluación de eficacia (Buena/Regular/Mala) + fecha + motivo
-      dictado + nº de albarán. EXECUTED → ASSESSED (`AssessmentService`), endpoint
-      de valoración y endpoint de solo-transcripción; en la PWA, bloque de
-      valoración en el detalle con dictado por micrófono (transcribe → texto
-      editable) y vista de solo lectura del registro evaluado.
-- [ ] M7 — validaciones de campaña (PDF firmado).
+- [x] **M1** — Spike: audio → JSON to the console (validate that Qwen
+      understands a field advisor). Throwaway, archived at
+      `docs/historico/spike_main.py`.
+- [x] **M2** — **Verified end-to-end.** Telegram voice note → transcription +
+      extraction with Qwen → legal validation → row persisted in Supabase.
+      Hexagonal architecture (core + ports + adapters), fuzzy lookup of
+      plot/product/equipment by the dictated alias.
+- [x] **M3** — **Verified end-to-end.** Prescription PDF (ReportLab) + upload to
+      Alibaba Cloud OSS, with a signed link (expires in 1h) downloaded from a phone.
+- [x] **M4** — **Verified on a real phone.** Installable PWA (React + Vite +
+      Tailwind): login via an email OTP code (or password), record button, audio
+      upload to the same pipeline, today's records list and on-demand PDF download.
+- [x] **M5** — State machine (OBSERVATION / PRESCRIBED → EXECUTED) + execution
+      confirmation (FLUJO B: real dose/area/spray/operator, re-validated) +
+      weather captured at the real date via Open-Meteo (with `WEATHER_PENDING` on
+      failure) + ITEAF inspection expiry warning + PWA list → detail screen (with
+      the actions on the detail).
+- [x] **M6** — Effectiveness assessment (Good/Fair/Poor) + date + dictated reason
+      + delivery-note number. EXECUTED → ASSESSED (`AssessmentService`), an
+      assessment endpoint and a transcription-only endpoint; in the PWA, an
+      assessment block on the detail with microphone dictation (transcribe →
+      editable text) and a read-only view of the assessed record.
+- [x] **M7** — Campaign validations. The advisor signs their conformity over a
+      holding's records, mandatory twice per campaign (MID_CYCLE + FINAL), with a
+      signed PDF. Backend (`CampaignValidationService`, holdings overview and
+      validation endpoints) and PWA validation screen grouped by holding and
+      campaign, with a 0/2 counter.
+
+Since M7, an incremental polish pass (not a numbered milestone): a PWA visual
+refresh (inline SVG icon set replacing emoji, shared app bar, refined brand
+palette), a **history** screen with a date-range filter (`/api/interventions`
+accepts `?from=&to=`), and voice dictation on the campaign-validation remarks.
 
 ## Stack
 
 **Backend**: Python 3.12 · FastAPI + Uvicorn · Pydantic V2 · Supabase
-(PostgreSQL + Auth por código OTP al email / contraseña) · Qwen-Audio + Qwen Instruct vía DashScope ·
-Alibaba Cloud OSS · ReportLab · clima vía Open-Meteo. Dependencias con `uv`.
+(PostgreSQL + Auth via email OTP code / password) · Qwen-Audio + Qwen Instruct
+through DashScope · Alibaba Cloud OSS · ReportLab · weather via Open-Meteo.
+Dependencies managed with `uv`.
 
-**PWA (M4)**: React 19 + Vite + Tailwind + vite-plugin-pwa. Dependencias con `npm`.
+**PWA (M4)**: React 19 + Vite + Tailwind + vite-plugin-pwa. Dependencies managed
+with `npm`.
 
-## Arquitectura (hexagonal, desde M2)
+## Architecture (hexagonal, from M2 on)
 
 ```
 app/
-  core/        domain/ (modelos, schemas, estados, errores, cálculos puros)
+  core/        domain/ (models, schemas, states, errors, pure calculations)
                ports/  (ABCs: Transcriber, Extractor, Repository, Notifier,
                         Storage, PdfGenerator, Weather)
                services/ (registration_pipeline = FLUJO A · execution_service =
-                          FLUJO B · assessment_service = FLUJO C · validation_service)
-  adapters/    inbound/  api.py (FastAPI: PWA + webhook de Telegram)
+                          FLUJO B · assessment_service = FLUJO C ·
+                          campaign_validation_service · validation_service)
+  adapters/    inbound/  api.py (FastAPI: PWA + Telegram webhook)
                outbound/ qwen.py · supabase_repo.py · oss_storage.py ·
                          reportlab_pdf.py · open_meteo_weather.py · telegram.py
   config/      settings.py · container.py (composition root) · .env
-pwa/           React + Vite + Tailwind + vite-plugin-pwa (cliente M4+)
+pwa/           React + Vite + Tailwind + vite-plugin-pwa (M4+ client)
 ```
 
-El núcleo solo depende de puertos (ABCs): el webhook de Telegram y la PWA llaman
-al **mismo** pipeline (`POST /api/records`) sin tocar lógica de negocio.
+The core depends only on ports (ABCs): the Telegram webhook and the PWA both call
+the **same** pipeline (`POST /api/records`) without touching business logic.
 
-## Instalación y ejecución local
+## Local setup and run
 
-**1. Instalar dependencias**
+**1. Install dependencies**
 ```bash
 uv sync
 ```
 
-**2. Configurar las claves**
+**2. Configure the keys**
 ```bash
 cp app/config/.env.example app/config/.env
-# Rellena a mano: TELEGRAM_TOKEN, SUPABASE_URL/SERVICE_KEY, DASHSCOPE_API_KEY,
-# OSS_* y DEFAULT_ADVISOR_ID (el UUID de un asesor ACTIVE que tengas sembrado
-# en Supabase). Nunca se commitea el .env.
+# Fill in by hand: TELEGRAM_TOKEN, SUPABASE_URL/SERVICE_KEY, DASHSCOPE_API_KEY,
+# OSS_* and DEFAULT_ADVISOR_ID (the UUID of an ACTIVE advisor you have seeded in
+# Supabase). The .env is never committed.
 ```
 
-**3. Levantar el servidor** (puerto 8000, recarga automática)
+**3. Start the server** (port 8000, auto-reload)
 ```bash
 uv run uvicorn app.adapters.inbound.api:app --host 127.0.0.1 --port 8000 --reload
 ```
-Comprobación rápida: `curl http://127.0.0.1:8000/health` → `{"status":"ok"}`.
+Quick check: `curl http://127.0.0.1:8000/health` → `{"status":"ok"}`.
 
-**4. Exponer el servidor a internet** (en otra terminal)
+**4. Expose the server to the internet** (in another terminal)
 ```bash
 ngrok http 8000
 ```
-*(Copia la URL pública `https://…` que genera.)*
+*(Copy the public `https://…` URL it generates.)*
 
-**5. Conectar el webhook de Telegram**
+**5. Connect the Telegram webhook**
 ```bash
 curl -X POST "https://api.telegram.org/bot<TELEGRAM_TOKEN>/setWebhook" \
      -H "Content-Type: application/json" \
-     -d '{"url": "https://<URL_DE_NGROK>/telegram/webhook"}'
+     -d '{"url": "https://<NGROK_URL>/telegram/webhook"}'
 ```
 
-Listo: envía una **nota de voz** al bot y responderá con el registro persistido.
+Done: send a **voice note** to the bot and it replies with the persisted record.
 
-> **Telegram es el stand-in de M2 y solo hace una cosa: registrar una
-> intervención** (audio → registro persistido + PDF). No tiene autenticación por
-> asesor, ni lista de registros, ni descarga de PDF bajo demanda — todo eso vive
-> **solo en la PWA** (M4). Telegram se mantiene como vía rápida de prueba del
-> pipeline; el cliente real es la PWA.
+> **Telegram is the M2 stand-in and does exactly one thing: register an
+> intervention** (audio → persisted record + PDF). It has no per-advisor
+> authentication, no records list and no on-demand PDF download — all of that
+> lives **only in the PWA** (M4). Telegram is kept as a quick way to exercise the
+> pipeline; the real client is the PWA.
 
 ## PWA (M4)
 
-El cliente que usan los asesores. Necesita el backend levantado (sección
-anterior, puerto 8000). Desde la raíz del repo:
+The client the advisors use. It needs the backend running (previous section,
+port 8000). From the repo root:
 
-**1. Instalar dependencias** (solo la primera vez)
+**1. Install dependencies** (first time only)
 ```bash
 cd pwa
 npm install
 ```
 
-**2. Arrancar el servidor de desarrollo** (Vite, puerto 5173)
+**2. Start the dev server** (Vite, port 5173)
 ```bash
 npm run dev
 ```
 
-**3. Exponerla por HTTPS** (en otra terminal) — el micrófono y la instalación
-de la PWA exigen un origen seguro, así que para probar en el móvil hace falta un
-túnel HTTPS, no `http://localhost`:
+**3. Expose it over HTTPS** (in another terminal) — the microphone and PWA
+installation require a secure origin, so testing on a phone needs an HTTPS
+tunnel, not `http://localhost`:
 ```bash
 cloudflared tunnel --url http://localhost:5173
 ```
-Abre en el móvil la URL `https://…trycloudflare.com` que imprime, inicia sesión
-con el código que llega al email (o con contraseña), graba una nota y aparecerá
-en la lista de hoy.
+Open the `https://…trycloudflare.com` URL it prints on the phone, sign in with
+the code emailed to you (or with a password), record a note and it shows up in
+today's list.
 
-## Apagado seguro
+## Safe shutdown
 
-**Backend / Telegram** — evita que Telegram bloquee el bot por reintentos contra
-una URL muerta:
+**Backend / Telegram** — keep Telegram from blocking the bot over retries against
+a dead URL:
 
 ```bash
 curl -X POST "https://api.telegram.org/bot<TELEGRAM_TOKEN>/deleteWebhook"
 ```
-Luego detén Uvicorn (`Ctrl + C`) y Ngrok (`Ctrl + C`).
+Then stop Uvicorn (`Ctrl + C`) and Ngrok (`Ctrl + C`).
 
-**PWA** — basta con `Ctrl + C` en las dos terminales: primero el túnel
-(`cloudflared`) y después Vite (`npm run dev`). Al cerrar el túnel, la URL
-`trycloudflare.com` deja de existir (son efímeras), así que no hay nada que
-revocar.
+**PWA** — just `Ctrl + C` in both terminals: the tunnel (`cloudflared`) first,
+then Vite (`npm run dev`). Closing the tunnel destroys the `trycloudflare.com`
+URL (they are ephemeral), so there is nothing to revoke.
 
 ## Tests
 
-Pocos tests por metodología (un test por caso límite, sin suite exhaustiva).
-Toda la suite de golpe:
+Few tests by methodology (one test per edge case, no exhaustive suite). The whole
+suite at once:
 
 ```bash
 uv run pytest
 ```
 
-La suite cubre:
+The suite covers:
 
-| Archivo | Qué prueba |
+| File | What it tests |
 | --- | --- |
-| `test_registration_pipeline.py` | el FLUJO A de punta a punta (con puertos falsos) |
-| `test_execution_service.py` | FLUJO B: confirmación de ejecución + clima + aviso ITEAF |
-| `test_assessment_service.py` | FLUJO C: valoración de eficacia (EXECUTED → ASSESSED) |
-| `test_validation_service.py` | validación legal (dosis, área, producto autorizado) |
-| `test_schemas.py` | `ExtractedFields` (saneado de la salida del LLM) |
-| `test_serialize_columns.py` | modelo de dominio ↔ columnas de la BD (sin drift) |
-| `test_fuzzy_lookup.py` | búsqueda difusa de parcela/producto/equipo por alias |
-| `test_states.py` | transiciones de la máquina de estados |
-| `test_auth.py` | verificación del JWT de Supabase (`current_advisor_id`) |
-| `test_api.py` | endpoints y mapeo de errores a `{error, mensaje}` |
+| `test_registration_pipeline.py` | FLUJO A end-to-end (with fake ports) |
+| `test_execution_service.py` | FLUJO B: execution confirmation + weather + ITEAF warning |
+| `test_assessment_service.py` | FLUJO C: effectiveness assessment (EXECUTED → ASSESSED) |
+| `test_campaign_validation_service.py` | M7: campaign validation (period, conformity, remarks) |
+| `test_validation_service.py` | legal validation (dose, area, authorized product) |
+| `test_schemas.py` | `ExtractedFields` (sanitizing the LLM output) |
+| `test_serialize_columns.py` | domain model ↔ DB columns (no drift) |
+| `test_fuzzy_lookup.py` | fuzzy lookup of plot/product/equipment by alias |
+| `test_states.py` | state-machine transitions |
+| `test_auth.py` | Supabase JWT verification (`current_advisor_id`) |
+| `test_api.py` | endpoints and error mapping to `{error, mensaje}` |
 
-Para un archivo suelto: `uv run pytest tests/test_registration_pipeline.py`.
+For a single file: `uv run pytest tests/test_registration_pipeline.py`.

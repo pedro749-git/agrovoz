@@ -909,3 +909,30 @@ This file becomes the thesis' design chapter.
   requests both pass the check, the constraint rejects the loser, and we honour
   idempotency (hard rule 3) instead of returning a 503; any other unique
   violation finds no row and re-raises · 2026-06-26
+- Extended `list_interventions` with optional `since`/`until` (UTC instants)
+  instead of reusing `list_interventions_in_period` · the period method is
+  holding-scoped, ascending and unbounded (it counts a holding's records for a
+  campaign validation); the history/today list is advisor-scoped, newest-first
+  and limited — the same query as Home, just date-bounded · discarded a third
+  `list_advisor_interventions_in_period` (real duplication) and re-scoping the
+  period method (breaks validations) · 2026-07-06
+- `/api/interventions?from=&to=` are civil Madrid days; the inbound layer maps
+  them to the exact UTC window `[from 00:00, (to+1) 00:00)` via `zoneinfo` before
+  the DB filter · keeps the repo a plain `created_at` range AND stays DST-correct
+  (rule 9) · discarded the frontend sending UTC instants (more client timezone
+  juggling) and a naive civil-date comparison (the day-boundary fuzz the count
+  method tolerates would drop a 00:30-Madrid record from "today") · 2026-07-06
+- Today's list queries the backend by date (`from==to==` Madrid today) instead
+  of fetching everything and filtering client-side · one code path for today and
+  history, and the correct-timezone window is computed server-side once · list
+  limit raised 100→500 so a season's history is not silently truncated (paginate
+  if that ever breaks) · 2026-07-06
+- PWA visual refresh keeps and refines the brand "cultivated soil" palette rather
+  than going neutral-SaaS · the warm agronomic identity (from the prototype) sets
+  it apart and is part of the TFG; emoji replaced by an inline SVG icon set (the
+  PWA's CSP blocks icon fonts/CDNs), a shared AppBar and tinted status badges ·
+  2026-07-06
+- Dictation extracted to a reusable `<Dictate>` button (mic → POST /api/transcribe
+  → text via callback) · the effectiveness assessment already had it and the
+  campaign-validation remarks needed the same, so one component serves both
+  instead of duplicating the MediaRecorder state machine · 2026-07-06
