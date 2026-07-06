@@ -1,10 +1,22 @@
-import { useEffect, useRef, useState } from 'react'
-import {
-  assessEffectiveness,
-  confirmExecution,
-  getPdfUrl,
-  transcribeAudio,
-} from './api.js'
+import { useEffect, useState } from 'react'
+import { assessEffectiveness, confirmExecution, getPdfUrl } from './api.js'
+import Dictate from './Dictate.jsx'
+import Icon from './Icon.jsx'
+
+// Shared look for the collapsed action triggers (a tinted, tappable chip with a
+// leading icon) and the compact form fields, so the three actions below stay
+// visually consistent. Full static class strings on purpose — Tailwind scans the
+// source as text, so a `bg-${tone}` template would never be generated.
+const CHIP_BASE =
+  'mt-2 inline-flex items-center gap-1.5 self-start rounded-lg px-3 py-2 text-xs font-semibold transition active:scale-[0.97]'
+const CHIP = {
+  olive: `${CHIP_BASE} bg-olive/10 text-olive`,
+  moss: `${CHIP_BASE} bg-moss/12 text-moss`,
+  amber: `${CHIP_BASE} bg-amber/12 text-amber`,
+  terra: `${CHIP_BASE} bg-terra/10 text-terra`,
+}
+const fieldClass =
+  'mt-1 w-full rounded-xl border border-line bg-card px-3 py-2 text-sm text-soil outline-none transition focus:border-olive focus:ring-2 focus:ring-olive/15'
 
 // Today's civil date (YYYY-MM-DD) in Spain — the confirm form prefills the
 // application date with it (CLAUDE.md rule 9: dates are decided in the advisor's
@@ -52,27 +64,21 @@ export function PdfButton({ interventionId }) {
 
   if (status === 'ready') {
     return (
-      <a
-        href={url}
-        download="prescripcion.pdf"
-        className="mt-2 inline-block text-xs font-semibold text-olive underline"
-      >
-        📄 Descargar prescripción (PDF)
+      <a href={url} download="prescripcion.pdf" className={CHIP.olive}>
+        <Icon name="download" className="h-4 w-4" />
+        Descargar prescripción (PDF)
       </a>
     )
   }
 
   return (
-    <button
-      type="button"
-      onClick={prepare}
-      className="mt-2 text-xs font-semibold text-olive underline"
-    >
+    <button type="button" onClick={prepare} className={CHIP.olive}>
+      <Icon name={status === 'error' ? 'refresh' : 'prescription'} className="h-4 w-4" />
       {status === 'loading'
         ? 'Preparando…'
         : status === 'error'
           ? 'No se pudo preparar — reintentar'
-          : '📄 Preparar prescripción (toca para generar PDF)'}
+          : 'Preparar prescripción (PDF)'}
     </button>
   )
 }
@@ -121,17 +127,13 @@ export function ConfirmExecution({ interventionId, onConfirmed }) {
 
   if (!open) {
     return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="mt-2 text-sm font-semibold text-moss underline"
-      >
-        ✅ Confirmar ejecución
+      <button type="button" onClick={() => setOpen(true)} className={CHIP.moss}>
+        <Icon name="check-circle" className="h-4 w-4" />
+        Confirmar ejecución
       </button>
     )
   }
 
-  const fieldClass = 'mt-1 w-full rounded-lg border border-line px-2 py-1 text-sm text-soil'
   return (
     <div className="mt-3 flex flex-col gap-2 border-t border-line pt-3">
       <label className="text-xs font-semibold text-ink">
@@ -199,12 +201,12 @@ export function ConfirmExecution({ interventionId, onConfirmed }) {
         />
       </label>
       {status === 'error' && <p className="text-xs text-terra">{error}</p>}
-      <div className="flex items-center gap-4">
+      <div className="mt-1 flex items-center gap-4">
         <button
           type="button"
           onClick={submit}
           disabled={status === 'saving'}
-          className="rounded-lg bg-moss px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50"
+          className="rounded-xl bg-moss px-4 py-2 text-xs font-bold text-white shadow-card transition active:scale-[0.97] disabled:opacity-50"
         >
           {status === 'saving' ? 'Confirmando…' : 'Confirmar'}
         </button>
@@ -212,7 +214,7 @@ export function ConfirmExecution({ interventionId, onConfirmed }) {
           type="button"
           onClick={() => setOpen(false)}
           disabled={status === 'saving'}
-          className="text-xs font-semibold text-ink underline"
+          className="text-xs font-semibold text-ink"
         >
           Cancelar
         </button>
@@ -243,49 +245,11 @@ export function AssessEffectiveness({ interventionId, onAssessed }) {
   const [notes, setNotes] = useState('')
   const [status, setStatus] = useState('idle') // idle | saving | error
   const [error, setError] = useState('')
-  // Dictation is its own little state machine, independent of the save.
-  const [dictation, setDictation] = useState('idle') // idle | recording | transcribing | error
-  const mediaRecorderRef = useRef(null)
-  const chunksRef = useRef([])
 
-  // Start capturing the reason. Mirrors Recorder: ask for the mic (needs HTTPS),
-  // collect chunks, and on stop glue them into one blob and transcribe it.
-  async function startDictation() {
-    setError('')
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const recorder = new MediaRecorder(stream)
-      mediaRecorderRef.current = recorder
-      chunksRef.current = []
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunksRef.current.push(e.data)
-      }
-      recorder.onstop = async () => {
-        stream.getTracks().forEach((t) => t.stop()) // release the mic
-        const blob = new Blob(chunksRef.current, { type: recorder.mimeType })
-        setDictation('transcribing')
-        try {
-          const text = await transcribeAudio(blob)
-          // Append (with a space) so several dictations accumulate; the advisor
-          // can still edit the box by hand afterwards.
-          setNotes((prev) => (prev ? `${prev} ${text}` : text))
-          setDictation('idle')
-        } catch (err) {
-          console.error(err)
-          setDictation('error')
-        }
-      }
-      recorder.start()
-      setDictation('recording')
-    } catch (err) {
-      console.error(err)
-      setError('No se pudo acceder al micrófono.')
-      setDictation('error')
-    }
-  }
-
-  function stopDictation() {
-    mediaRecorderRef.current?.stop() // triggers onstop (transcription) above
+  // Append a dictated fragment (with a space) so several dictations accumulate;
+  // the advisor can still edit the box by hand afterwards.
+  function appendNote(text) {
+    setNotes((prev) => (prev ? `${prev} ${text}` : text))
   }
 
   async function submit() {
@@ -311,17 +275,13 @@ export function AssessEffectiveness({ interventionId, onAssessed }) {
 
   if (!open) {
     return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="mt-2 text-sm font-semibold text-amber underline"
-      >
-        ★ Valorar eficacia
+      <button type="button" onClick={() => setOpen(true)} className={CHIP.amber}>
+        <Icon name="star" className="h-4 w-4" strokeWidth={0} />
+        Valorar eficacia
       </button>
     )
   }
 
-  const fieldClass = 'mt-1 w-full rounded-lg border border-line px-2 py-1 text-sm text-soil'
   return (
     <div className="mt-3 flex flex-col gap-2 border-t border-line pt-3">
       <span className="text-xs font-semibold text-ink">¿Cómo funcionó el tratamiento?</span>
@@ -357,30 +317,15 @@ export function AssessEffectiveness({ interventionId, onAssessed }) {
           className={fieldClass}
         />
       </label>
-      <button
-        type="button"
-        onClick={dictation === 'recording' ? stopDictation : startDictation}
-        disabled={dictation === 'transcribing'}
-        className={`self-start text-xs font-semibold underline disabled:opacity-50 ${
-          dictation === 'recording' ? 'text-terra' : 'text-olive'
-        }`}
-      >
-        {dictation === 'recording'
-          ? '⏹ Detener y transcribir'
-          : dictation === 'transcribing'
-            ? 'Transcribiendo…'
-            : dictation === 'error'
-              ? '🎤 Micrófono falló — reintentar'
-              : '🎤 Dictar el motivo'}
-      </button>
+      <Dictate onTranscribed={appendNote} label="Dictar el motivo" />
 
       {status === 'error' && <p className="text-xs text-terra">{error}</p>}
-      <div className="flex items-center gap-4">
+      <div className="mt-1 flex items-center gap-4">
         <button
           type="button"
           onClick={submit}
           disabled={status === 'saving'}
-          className="rounded-lg bg-amber px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50"
+          className="rounded-xl bg-amber px-4 py-2 text-xs font-bold text-white shadow-card transition active:scale-[0.97] disabled:opacity-50"
         >
           {status === 'saving' ? 'Guardando…' : 'Guardar valoración'}
         </button>
@@ -388,7 +333,7 @@ export function AssessEffectiveness({ interventionId, onAssessed }) {
           type="button"
           onClick={() => setOpen(false)}
           disabled={status === 'saving'}
-          className="text-xs font-semibold text-ink underline"
+          className="text-xs font-semibold text-ink"
         >
           Cancelar
         </button>

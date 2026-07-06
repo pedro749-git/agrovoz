@@ -4,6 +4,7 @@ import Login from './Login.jsx'
 import Settings from './Settings.jsx'
 import Home from './Home.jsx'
 import Detail from './Detail.jsx'
+import History from './History.jsx'
 import Validation from './Validation.jsx'
 
 // Wraps Settings (which takes an onClose) as a route element, sending "Volver"
@@ -31,6 +32,7 @@ function App() {
   return (
     <Routes>
       <Route path="/" element={<Home />} />
+      <Route path="/historial" element={<History />} />
       <Route path="/registro/:id" element={<Detail />} />
       <Route path="/validaciones" element={<Validation />} />
       <Route path="/ajustes" element={<SettingsRoute session={session} />} />

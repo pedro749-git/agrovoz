@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { supabase } from './supabase.js'
+import AppBar from './AppBar.jsx'
+import Icon from './Icon.jsx'
 
 // Settings screen. For now its only job is letting an already-authenticated
 // advisor set (or change) their password. Because the session is live, this is
@@ -43,25 +45,12 @@ function Settings({ session, onClose }) {
 
   return (
     <div className="flex min-h-dvh flex-col bg-bone text-soil">
-      <header className="bg-olive-d px-4 pb-3 pt-safe text-white">
-        <div className="flex items-center justify-between pt-3">
-          <div>
-            <div className="text-sm font-semibold tracking-wide">Ajustes</div>
-            <div className="text-[10px] opacity-70">{session.user.email}</div>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-xs font-semibold opacity-80 underline"
-          >
-            Volver
-          </button>
-        </div>
-      </header>
+      <AppBar title="Ajustes" subtitle={session.user.email} onBack={onClose} />
 
       <main className="flex-1 overflow-y-auto px-6 pb-safe">
         <section className="mx-auto mt-8 w-full max-w-xs">
-          <h2 className="text-sm font-bold uppercase tracking-wider text-ink">
+          <h2 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-[0.14em] text-ink">
+            <Icon name="lock" className="h-4 w-4" />
             Contraseña
           </h2>
           <p className="mt-2 text-sm leading-relaxed text-ink">
@@ -85,7 +74,7 @@ function Settings({ session, onClose }) {
               placeholder="Repite la contraseña"
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
-              className="mt-3 w-full rounded-lg border border-line bg-card px-4 py-3 text-base outline-none focus:border-olive"
+              className="mt-3 w-full rounded-xl border border-line bg-card px-4 py-3 text-base outline-none transition focus:border-olive focus:ring-2 focus:ring-olive/15"
             />
 
             {error && <p className="mt-3 text-sm text-terra">{error}</p>}
@@ -98,7 +87,7 @@ function Settings({ session, onClose }) {
             <button
               type="submit"
               disabled={status === 'saving'}
-              className="mt-4 w-full rounded-lg bg-olive py-3 font-bold text-white shadow transition active:scale-[0.98] disabled:opacity-60"
+              className="mt-4 w-full rounded-xl bg-olive py-3 font-bold text-white shadow-card transition hover:bg-olive-d active:scale-[0.98] disabled:opacity-60"
             >
               {status === 'saving' ? 'Guardando…' : 'Guardar contraseña'}
             </button>

@@ -33,8 +33,8 @@ export default defineConfig({
         short_name: 'Agrovoz',
         description: 'Registro fitosanitario por voz para asesores GIP',
         lang: 'es',
-        theme_color: '#15803d', // green-700: the app bar colour once installed
-        background_color: '#ffffff',
+        theme_color: '#3c4a22', // brand dark olive: the app bar colour once installed
+        background_color: '#f5f2ea', // warm paper, matches the app background
         display: 'standalone', // launches like a native app (no browser chrome)
         start_url: '/',
         icons: [

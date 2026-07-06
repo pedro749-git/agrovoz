@@ -5,6 +5,9 @@ import {
   getValidationPdfUrl,
   listHoldings,
 } from './api.js'
+import AppBar from './AppBar.jsx'
+import Dictate from './Dictate.jsx'
+import Icon from './Icon.jsx'
 
 // The two mandatory campaign validations, English value -> Spanish label. The
 // backend validates the value against its enum, so these must match the model.
@@ -59,17 +62,7 @@ function Validation() {
 
   return (
     <div className="flex min-h-dvh flex-col bg-bone text-soil">
-      <header className="flex items-center gap-3 bg-olive-d px-4 pb-3 pt-safe text-white">
-        <button
-          type="button"
-          onClick={() => navigate('/')}
-          className="pt-3 text-lg leading-none"
-          aria-label="Volver"
-        >
-          ‹
-        </button>
-        <div className="pt-3 text-sm font-semibold">Validaciones de campaña</div>
-      </header>
+      <AppBar title="Validaciones de campaña" onBack={() => navigate('/')} />
 
       <main className="mx-auto w-full max-w-md flex-1 overflow-y-auto px-5 pb-safe">
         {status === 'loading' && (
@@ -81,8 +74,9 @@ function Validation() {
             <button
               type="button"
               onClick={refresh}
-              className="mt-2 text-sm font-semibold text-olive underline"
+              className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-olive"
             >
+              <Icon name="refresh" className="h-4 w-4" />
               Reintentar
             </button>
           </div>
@@ -113,14 +107,21 @@ function HoldingCard({ holding, onChanged }) {
   ].sort((a, b) => b.localeCompare(a))
 
   return (
-    <li className="rounded-xl border border-line bg-card p-4 shadow-sm">
-      <div className="font-semibold text-soil">{holding.owner_name}</div>
-      <div className="text-xs text-ink">REA/REGEPA: {holding.rea_regepa_number}</div>
-      {holding.plots.length > 0 && (
-        <div className="mt-1 text-xs text-ink">
-          Parcelas: {holding.plots.map((p) => p.voice_alias).join(' · ')}
+    <li className="rounded-2xl border border-line bg-card p-4 shadow-card">
+      <div className="flex items-start gap-3">
+        <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-olive/10 text-olive">
+          <Icon name="map-pin" className="h-5 w-5" />
         </div>
-      )}
+        <div className="min-w-0">
+          <div className="font-semibold text-soil">{holding.owner_name}</div>
+          <div className="text-xs text-ink">REA/REGEPA: {holding.rea_regepa_number}</div>
+          {holding.plots.length > 0 && (
+            <div className="mt-0.5 text-xs text-ink">
+              Parcelas: {holding.plots.map((p) => p.voice_alias).join(' · ')}
+            </div>
+          )}
+        </div>
+      </div>
 
       <div className="mt-3 flex flex-col gap-3">
         {campaigns.map((campaign) => (
@@ -144,14 +145,15 @@ function CampaignBlock({ holdingId, campaign, validations, onChanged }) {
   const done = TYPES.filter((t) => byType[t.value]).length
 
   return (
-    <div className="rounded-lg border border-line bg-bone p-3">
+    <div className="rounded-xl border border-line bg-bone p-3">
       <div className="flex items-center justify-between">
         <span className="text-sm font-bold text-soil">Campaña {campaign}</span>
         <span
-          className={`rounded-full px-2 py-0.5 text-xs font-bold text-white ${
-            done === 2 ? 'bg-moss' : 'bg-amber'
+          className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${
+            done === 2 ? 'bg-moss/12 text-moss' : 'bg-amber/12 text-amber'
           }`}
         >
+          {done === 2 && <Icon name="check" className="h-3 w-3" />}
           {done}/2
         </span>
       </div>
@@ -181,10 +183,14 @@ function Slot({ holdingId, campaign, type, validation, onSigned }) {
         <div className="flex items-center justify-between">
           <span className="text-xs font-semibold text-ink">{type.label}</span>
           <span
-            className={`text-xs font-bold ${
+            className={`inline-flex items-center gap-1 text-xs font-bold ${
               validation.conformity ? 'text-moss' : 'text-terra'
             }`}
           >
+            <Icon
+              name={validation.conformity ? 'check-circle' : 'alert-triangle'}
+              className="h-3.5 w-3.5"
+            />
             {validation.conformity ? 'Conforme' : 'No conforme'}
           </span>
         </div>
@@ -242,9 +248,10 @@ function SignForm({ holdingId, campaign, type, onSigned }) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="self-start text-xs font-semibold text-olive underline"
+        className="inline-flex items-center gap-1.5 self-start rounded-lg bg-olive/10 px-3 py-2 text-xs font-semibold text-olive transition active:scale-[0.97]"
       >
-        ★ Firmar {type.label.toLowerCase()}
+        <Icon name="pen" className="h-4 w-4" />
+        Firmar {type.label.toLowerCase()}
       </button>
     )
   }
@@ -263,7 +270,7 @@ function SignForm({ holdingId, campaign, type, onSigned }) {
             key={String(c.value)}
             type="button"
             onClick={() => setConformity(c.value)}
-            className={`flex-1 rounded-lg py-1.5 text-xs font-bold transition ${
+            className={`flex-1 rounded-xl py-2 text-xs font-bold transition ${
               conformity === c.value ? `${c.className} text-white` : 'border border-line text-ink'
             }`}
           >
@@ -277,24 +284,29 @@ function SignForm({ holdingId, campaign, type, onSigned }) {
         value={remarks}
         onChange={(e) => setRemarks(e.target.value)}
         placeholder={conformity ? 'Observaciones (opcional)' : 'Motivo (obligatorio si no conforme)'}
-        className="w-full rounded-lg border border-line px-2 py-1 text-sm text-soil"
+        className="w-full rounded-xl border border-line bg-card px-3 py-2 text-sm text-soil outline-none transition focus:border-olive focus:ring-2 focus:ring-olive/15"
+      />
+      <Dictate
+        onTranscribed={(text) => setRemarks((prev) => (prev ? `${prev} ${text}` : text))}
+        label="Dictar observaciones"
       />
 
       {status === 'error' && <p className="text-xs text-terra">{error}</p>}
-      <div className="flex items-center gap-4">
+      <div className="mt-1 flex items-center gap-4">
         <button
           type="button"
           onClick={submit}
           disabled={status === 'saving'}
-          className="rounded-lg bg-olive px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 rounded-xl bg-olive px-4 py-2 text-xs font-bold text-white shadow-card transition active:scale-[0.97] disabled:opacity-50"
         >
+          <Icon name="pen" className="h-3.5 w-3.5" />
           {status === 'saving' ? 'Firmando…' : 'Firmar y generar PDF'}
         </button>
         <button
           type="button"
           onClick={() => setOpen(false)}
           disabled={status === 'saving'}
-          className="text-xs font-semibold text-ink underline"
+          className="text-xs font-semibold text-ink"
         >
           Cancelar
         </button>
@@ -334,9 +346,10 @@ function ValidationPdf({ validationId }) {
       <a
         href={url}
         download="validacion.pdf"
-        className="mt-1 inline-block text-xs font-semibold text-olive underline"
+        className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-olive/10 px-3 py-1.5 text-xs font-semibold text-olive"
       >
-        📄 Descargar validación (PDF)
+        <Icon name="download" className="h-4 w-4" />
+        Descargar validación (PDF)
       </a>
     )
   }
@@ -344,13 +357,14 @@ function ValidationPdf({ validationId }) {
     <button
       type="button"
       onClick={prepare}
-      className="mt-1 text-xs font-semibold text-olive underline"
+      className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-olive/10 px-3 py-1.5 text-xs font-semibold text-olive transition active:scale-[0.97]"
     >
+      <Icon name={status === 'error' ? 'refresh' : 'download'} className="h-4 w-4" />
       {status === 'loading'
         ? 'Preparando…'
         : status === 'error'
           ? 'No se pudo preparar — reintentar'
-          : '📄 Preparar validación (PDF)'}
+          : 'Preparar validación (PDF)'}
     </button>
   )
 }

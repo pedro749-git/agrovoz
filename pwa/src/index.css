@@ -5,17 +5,51 @@
    each colour becomes a utility: --color-olive -> bg-olive / text-olive /
    border-olive, etc. The default Tailwind colours stay available too. */
 @theme {
-  --color-soil: #1f1a14; /* main text on light */
-  --color-bone: #f3efe6; /* agronomic-paper background */
+  --color-soil: #201a12; /* main text on light */
+  --color-bone: #f5f2ea; /* agronomic-paper background */
   --color-card: #ffffff;
-  --color-line: #d9d2c4; /* hairlines / borders */
+  --color-line: #e3ddcf; /* hairlines / borders (softened) */
   --color-olive: #5a6b35; /* brand · prescription */
-  --color-olive-d: #3f4d24; /* dark olive · top bar */
+  --color-olive-d: #3c4a22; /* dark olive · top bar */
   --color-terra: #b8442e; /* error · recording */
-  --color-amber: #c98a1b; /* pending */
+  --color-amber: #c1841a; /* pending */
   --color-sky: #37607a; /* observation */
-  --color-moss: #7c8a52; /* valid */
-  --color-ink: #6b6354; /* soft ink · secondary text */
+  --color-moss: #6f8047; /* valid */
+  --color-ink: #7a7264; /* soft ink · secondary text */
+}
+
+/* --- Base tweaks -----------------------------------------------------------
+   Small quality-of-life defaults so the app feels native: no grey flash on tap
+   (iOS/Android paint a highlight over any tapped element by default), smoother
+   text, and no accidental horizontal rubber-banding. */
+@layer base {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    overflow-x: hidden;
+  }
+}
+
+/* --- Elevation utilities ---------------------------------------------------
+   Two card depths in the warm soil tint (never a cold neutral shadow, which
+   would fight the paper palette). `shadow-card` is the resting card; a close
+   1px edge grounds it and a soft, far, low-opacity halo lifts it. `shadow-float`
+   is for the record button / anything that should read as raised. */
+@utility shadow-card {
+  box-shadow:
+    0 1px 2px rgb(32 26 18 / 0.05),
+    0 12px 28px -18px rgb(32 26 18 / 0.28);
+}
+@utility shadow-float {
+  box-shadow:
+    0 6px 16px -6px rgb(32 26 18 / 0.35),
+    0 2px 4px rgb(32 26 18 / 0.12);
 }
 
 /* --- Safe-area utilities ----------------------------------------------------

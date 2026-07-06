@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { supabase } from './supabase.js'
+import AppBar from './AppBar.jsx'
+import Icon from './Icon.jsx'
 
 // Login screen with two ways in:
 //  - "code" (primary): the advisor types their email, we send a 6-digit code,
@@ -95,24 +97,23 @@ function Login() {
 
   return (
     <div className="flex min-h-dvh flex-col bg-bone text-soil">
-      <header className="bg-olive-d px-4 pb-3 pt-safe text-white">
-        <div className="pt-3">
-          <div className="text-sm font-semibold tracking-wide">AgroVoz</div>
-          <div className="text-[10px] opacity-70">Cuaderno de campo por voz</div>
-        </div>
-      </header>
+      <AppBar title="Agrovoz" subtitle="Cuaderno de campo por voz" />
 
       <main className="flex flex-1 flex-col items-center justify-center px-6 pb-safe">
         <div className="w-full max-w-xs">
+          {/* Brand mark, so the login lands with the app's identity, not a bare form. */}
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-b from-olive to-olive-d text-white shadow-float">
+            <Icon name="leaf" className="h-8 w-8" />
+          </div>
           <h1 className="text-center text-lg font-bold">Iniciar sesión</h1>
 
           {/* Tabs: pick how to sign in. */}
-          <div className="mt-5 grid grid-cols-2 rounded-lg border border-line bg-card p-1 text-sm font-semibold">
+          <div className="mt-5 grid grid-cols-2 rounded-xl border border-line bg-card p-1 text-sm font-semibold">
             <button
               type="button"
               onClick={() => switchMethod('code')}
-              className={`rounded-md py-2 transition ${
-                method === 'code' ? 'bg-olive text-white shadow' : 'text-ink'
+              className={`rounded-lg py-2 transition ${
+                method === 'code' ? 'bg-olive text-white shadow-card' : 'text-ink'
               }`}
             >
               Código
@@ -120,8 +121,8 @@ function Login() {
             <button
               type="button"
               onClick={() => switchMethod('password')}
-              className={`rounded-md py-2 transition ${
-                method === 'password' ? 'bg-olive text-white shadow' : 'text-ink'
+              className={`rounded-lg py-2 transition ${
+                method === 'password' ? 'bg-olive text-white shadow-card' : 'text-ink'
               }`}
             >
               Contraseña
@@ -142,7 +143,7 @@ function Login() {
                 placeholder="tu@correo.es"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="mt-5 w-full rounded-lg border border-line bg-card px-4 py-3 text-base outline-none focus:border-olive"
+                className="mt-5 w-full rounded-xl border border-line bg-card px-4 py-3 text-base outline-none transition focus:border-olive focus:ring-2 focus:ring-olive/15"
               />
 
               {error && <p className="mt-3 text-sm text-terra">{error}</p>}
@@ -150,7 +151,7 @@ function Login() {
               <button
                 type="submit"
                 disabled={status === 'sending'}
-                className="mt-4 w-full rounded-lg bg-olive py-3 font-bold text-white shadow transition active:scale-[0.98] disabled:opacity-60"
+                className="mt-4 w-full rounded-xl bg-olive py-3 font-bold text-white shadow-card transition hover:bg-olive-d active:scale-[0.98] disabled:opacity-60"
               >
                 {status === 'sending' ? 'Enviando…' : 'Enviar código'}
               </button>
@@ -174,7 +175,7 @@ function Login() {
                 placeholder="000000"
                 value={code}
                 onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
-                className="mt-5 w-full rounded-lg border border-line bg-card px-4 py-3 text-center text-2xl tracking-[0.4em] outline-none focus:border-olive"
+                className="mt-5 w-full rounded-xl border border-line bg-card px-4 py-3 text-center text-2xl tracking-[0.4em] outline-none transition focus:border-olive focus:ring-2 focus:ring-olive/15"
               />
 
               {error && <p className="mt-3 text-sm text-terra">{error}</p>}
@@ -182,7 +183,7 @@ function Login() {
               <button
                 type="submit"
                 disabled={status === 'sending'}
-                className="mt-4 w-full rounded-lg bg-olive py-3 font-bold text-white shadow transition active:scale-[0.98] disabled:opacity-60"
+                className="mt-4 w-full rounded-xl bg-olive py-3 font-bold text-white shadow-card transition hover:bg-olive-d active:scale-[0.98] disabled:opacity-60"
               >
                 {status === 'sending' ? 'Comprobando…' : 'Entrar'}
               </button>
@@ -194,7 +195,7 @@ function Login() {
                   setCode('')
                   setError(null)
                 }}
-                className="mt-4 w-full text-sm font-semibold text-olive underline"
+                className="mt-4 w-full text-sm font-semibold text-olive"
               >
                 Usar otro correo
               </button>
@@ -215,7 +216,7 @@ function Login() {
                 placeholder="tu@correo.es"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="mt-5 w-full rounded-lg border border-line bg-card px-4 py-3 text-base outline-none focus:border-olive"
+                className="mt-5 w-full rounded-xl border border-line bg-card px-4 py-3 text-base outline-none transition focus:border-olive focus:ring-2 focus:ring-olive/15"
               />
 
               <input
@@ -225,7 +226,7 @@ function Login() {
                 placeholder="Contraseña"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="mt-3 w-full rounded-lg border border-line bg-card px-4 py-3 text-base outline-none focus:border-olive"
+                className="mt-3 w-full rounded-xl border border-line bg-card px-4 py-3 text-base outline-none transition focus:border-olive focus:ring-2 focus:ring-olive/15"
               />
 
               {error && <p className="mt-3 text-sm text-terra">{error}</p>}
@@ -233,7 +234,7 @@ function Login() {
               <button
                 type="submit"
                 disabled={status === 'sending'}
-                className="mt-4 w-full rounded-lg bg-olive py-3 font-bold text-white shadow transition active:scale-[0.98] disabled:opacity-60"
+                className="mt-4 w-full rounded-xl bg-olive py-3 font-bold text-white shadow-card transition hover:bg-olive-d active:scale-[0.98] disabled:opacity-60"
               >
                 {status === 'sending' ? 'Entrando…' : 'Entrar'}
               </button>

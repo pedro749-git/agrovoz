@@ -17,7 +17,7 @@ Contract notes:
 """
 
 from abc import ABC, abstractmethod
-from datetime import date
+from datetime import date, datetime
 from uuid import UUID
 
 from app.core.domain.models import (
@@ -46,11 +46,19 @@ class Repository(ABC):
 
     @abstractmethod
     async def list_interventions(
-        self, advisor_id: UUID, *, state: LifecycleState | None = None
+        self,
+        advisor_id: UUID,
+        *,
+        state: LifecycleState | None = None,
+        since: datetime | None = None,
+        until: datetime | None = None,
     ) -> list[Intervention]:
         """The advisor's interventions, newest first, optionally filtered by
         lifecycle state (spec §7 GET /api/interventions). Powers the PWA Home
-        list. Filters ``deleted_at IS NULL`` like every read."""
+        list (today) and the history screen. ``since``/``until`` are UTC instants
+        bounding ``created_at`` as a half-open window ``[since, until)``; either
+        may be omitted for an open end. Filters ``deleted_at IS NULL`` like every
+        read."""
 
     @abstractmethod
     async def get_holding(self, holding_id: UUID) -> Holding | None:

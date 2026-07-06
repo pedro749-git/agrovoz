@@ -161,7 +161,12 @@ class SupabaseRepository(Repository):
         return _deserialize(Advisor, res.data[0]) if res.data else None
 
     async def list_interventions(
-        self, advisor_id: UUID, *, state: LifecycleState | None = None
+        self,
+        advisor_id: UUID,
+        *,
+        state: LifecycleState | None = None,
+        since: datetime | None = None,
+        until: datetime | None = None,
     ) -> list[Intervention]:
         client = await get_client()
         query = (
@@ -172,7 +177,17 @@ class SupabaseRepository(Repository):
         )
         if state is not None:
             query = query.eq("lifecycle_state", state.value)
-        res = await _run(query.order("created_at", desc=True).limit(100))
+        # created_at is a UTC timestamp; since/until are the UTC instants the
+        # inbound layer computed from the advisor's civil-day range. Half-open
+        # [since, until) so a day-boundary record is never double-counted.
+        if since is not None:
+            query = query.gte("created_at", since.isoformat())
+        if until is not None:
+            query = query.lt("created_at", until.isoformat())
+        # 500 (not 100) so a full season's history is not silently truncated; a
+        # single advisor's yearly volume stays well under this. Paginate if that
+        # ever stops holding.
+        res = await _run(query.order("created_at", desc=True).limit(500))
         return [_deserialize(Intervention, row) for row in res.data]
 
     async def get_holding(self, holding_id: UUID) -> Holding | None:

@@ -103,12 +103,32 @@ def test_unexpected_error_maps_to_500(client, monkeypatch):
 
 
 def test_list_interventions_200(client, monkeypatch):
-    async def fake_list(advisor_id, *, state=None):
+    async def fake_list(advisor_id, *, state=None, since=None, until=None):
         assert advisor_id == ADV
         return [_intervention(), _intervention(LifecycleState.EXECUTED)]
     monkeypatch.setattr(container.repository, "list_interventions", fake_list)
     r = client.get("/api/interventions")
     assert r.status_code == 200 and len(r.json()) == 2
+
+
+def test_list_interventions_date_range_maps_to_utc_window(client, monkeypatch):
+    # ?from=&to= are civil Madrid days, inclusive. Summer (CEST = UTC+2), so the
+    # window must be [from 00:00 → 22:00 UTC the day before, (to+1) 00:00 → 22:00
+    # UTC on `to`), NOT a naive same-date comparison.
+    from datetime import datetime, timezone
+
+    captured = {}
+
+    async def fake_list(advisor_id, *, state=None, since=None, until=None):
+        captured["since"] = since
+        captured["until"] = until
+        return []
+
+    monkeypatch.setattr(container.repository, "list_interventions", fake_list)
+    r = client.get("/api/interventions?from=2026-07-06&to=2026-07-06")
+    assert r.status_code == 200
+    assert captured["since"] == datetime(2026, 7, 5, 22, 0, tzinfo=timezone.utc)
+    assert captured["until"] == datetime(2026, 7, 6, 22, 0, tzinfo=timezone.utc)
 
 
 def test_get_intervention_detail_200(client, monkeypatch):

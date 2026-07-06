@@ -1,21 +1,48 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { getIntervention } from './api.js'
+import AppBar from './AppBar.jsx'
+import Icon from './Icon.jsx'
 import { AssessEffectiveness, ConfirmExecution, PdfButton } from './RecordActions.jsx'
 
-// Spanish label + icon + colour per lifecycle state (inspired by the prototype).
+// Spanish label + icon + colour per lifecycle state. `grad` tints the hero badge
+// with a soft brand gradient; `tint`/`text` drive the small pill.
 const STATE = {
-  OBSERVATION: { label: 'Observación', icon: '👁', className: 'bg-sky' },
-  PRESCRIBED: { label: 'Prescripción', icon: '📄', className: 'bg-olive' },
-  EXECUTED: { label: 'Ejecución', icon: '✓', className: 'bg-moss' },
-  ASSESSED: { label: 'Evaluada', icon: '★', className: 'bg-amber' },
+  OBSERVATION: {
+    label: 'Observación',
+    icon: 'eye',
+    grad: 'from-sky/90 to-sky',
+    tint: 'bg-sky/10',
+    text: 'text-sky',
+  },
+  PRESCRIBED: {
+    label: 'Prescripción',
+    icon: 'prescription',
+    grad: 'from-olive to-olive-d',
+    tint: 'bg-olive/10',
+    text: 'text-olive',
+  },
+  EXECUTED: {
+    label: 'Ejecución',
+    icon: 'check',
+    grad: 'from-moss/90 to-moss',
+    tint: 'bg-moss/12',
+    text: 'text-moss',
+  },
+  ASSESSED: {
+    label: 'Evaluada',
+    icon: 'star',
+    grad: 'from-amber/90 to-amber',
+    tint: 'bg-amber/12',
+    text: 'text-amber',
+  },
 }
 
-// English effectiveness value -> Spanish label + colour for the read-only block.
+// English effectiveness value -> Spanish label + tinted pill for the read-only block.
 const EFFECTIVENESS = {
-  GOOD: { label: 'Buena', className: 'bg-moss' },
-  FAIR: { label: 'Regular', className: 'bg-amber' },
-  POOR: { label: 'Mala', className: 'bg-terra' },
+  GOOD: { label: 'Buena', tint: 'bg-moss/12', text: 'text-moss' },
+  FAIR: { label: 'Regular', tint: 'bg-amber/12', text: 'text-amber' },
+  POOR: { label: 'Mala', tint: 'bg-terra/10', text: 'text-terra' },
 }
 
 // Date-only strings (YYYY-MM-DD) are shown verbatim as DD/MM/YYYY — never parsed
@@ -52,35 +79,46 @@ function KV({ k, v }) {
 function Section({ title, children }) {
   return (
     <>
-      <h3 className="mt-5 mb-2 text-[10px] font-bold uppercase tracking-wider text-ink">
+      <h3 className="mt-5 mb-2 text-[10px] font-bold uppercase tracking-[0.14em] text-ink">
         {title}
       </h3>
-      <div className="rounded-xl border border-line bg-card p-3">{children}</div>
+      <div className="rounded-2xl border border-line bg-card p-4 shadow-card">{children}</div>
     </>
   )
 }
 
 // The three-cell weather strip, shown only when there is at least one reading.
+// Each cell leads with its icon so the reading is scannable at a glance.
 function Weather({ r }) {
   const cells = []
-  if (r.temperature_c != null) cells.push([`${Math.round(r.temperature_c)}°`, 'Temp'])
+  if (r.temperature_c != null) {
+    cells.push({ icon: 'thermometer', val: `${Math.round(r.temperature_c)}°`, lab: 'Temp' })
+  }
   if (r.relative_humidity_pct != null) {
-    cells.push([`${Math.round(r.relative_humidity_pct)}%`, 'Humedad'])
+    cells.push({ icon: 'droplet', val: `${Math.round(r.relative_humidity_pct)}%`, lab: 'Humedad' })
   }
   if (r.wind_speed_kmh != null) {
-    cells.push([`${Math.round(r.wind_speed_kmh)}`, `km/h ${r.wind_direction ?? ''}`.trim()])
+    cells.push({
+      icon: 'wind',
+      val: `${Math.round(r.wind_speed_kmh)}`,
+      lab: `km/h ${r.wind_direction ?? ''}`.trim(),
+    })
   }
   if (cells.length === 0) {
     return r.audit_state === 'WEATHER_PENDING' ? (
-      <p className="text-xs text-terra">⛅ Clima pendiente</p>
+      <p className="inline-flex items-center gap-1.5 text-xs text-amber">
+        <Icon name="cloud" className="h-4 w-4" />
+        Clima pendiente
+      </p>
     ) : null
   }
   return (
     <div className="flex gap-2">
-      {cells.map(([val, lab]) => (
-        <div key={lab} className="flex-1 rounded-lg bg-bone py-2 text-center">
-          <div className="text-sm font-bold text-soil">{val}</div>
-          <div className="mt-0.5 text-[8.5px] uppercase tracking-wide text-ink">{lab}</div>
+      {cells.map((c) => (
+        <div key={c.lab} className="flex-1 rounded-xl bg-bone py-2.5 text-center">
+          <Icon name={c.icon} className="mx-auto h-4 w-4 text-olive" />
+          <div className="mt-1 text-sm font-bold text-soil">{c.val}</div>
+          <div className="mt-0.5 text-[8.5px] uppercase tracking-wide text-ink">{c.lab}</div>
         </div>
       ))}
     </div>
@@ -122,17 +160,7 @@ function Detail() {
 
   return (
     <div className="flex min-h-dvh flex-col bg-bone text-soil">
-      <header className="flex items-center gap-3 bg-olive-d px-4 pb-3 pt-safe text-white">
-        <button
-          type="button"
-          onClick={() => navigate('/')}
-          className="pt-3 text-lg leading-none"
-          aria-label="Volver"
-        >
-          ‹
-        </button>
-        <div className="pt-3 text-sm font-semibold">{s ? s.label : 'Registro'}</div>
-      </header>
+      <AppBar title={s ? s.label : 'Registro'} onBack={() => navigate('/')} />
 
       <main className="mx-auto w-full max-w-md flex-1 overflow-y-auto px-5 pb-safe">
         {status === 'loading' && (
@@ -144,11 +172,11 @@ function Detail() {
         {status === 'ready' && r && (
           <>
             {/* Hero: state + plot context (the where). */}
-            <div className="pt-5 text-center">
+            <div className="pt-6 text-center">
               <div
-                className={`mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-2xl text-2xl text-white ${s.className}`}
+                className={`mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-b text-white shadow-float ${s.grad}`}
               >
-                {s.icon}
+                <Icon name={s.icon} className="h-7 w-7" strokeWidth={s.icon === 'star' ? 0 : 2.2} />
               </div>
               <div className="text-lg font-bold">{r.plot?.voice_alias ?? '—'}</div>
               {r.plot && (
@@ -226,9 +254,9 @@ function Detail() {
                 <div className="flex items-center justify-between py-1">
                   <span className="text-sm text-ink">Eficacia</span>
                   <span
-                    className={`rounded-full px-2.5 py-0.5 text-xs font-bold text-white ${
-                      (EFFECTIVENESS[r.effectiveness] ?? {}).className ?? 'bg-ink'
-                    }`}
+                    className={`rounded-full px-2.5 py-1 text-xs font-bold ${
+                      (EFFECTIVENESS[r.effectiveness] ?? {}).tint ?? 'bg-ink/10'
+                    } ${(EFFECTIVENESS[r.effectiveness] ?? {}).text ?? 'text-ink'}`}
                   >
                     {(EFFECTIVENESS[r.effectiveness] ?? {}).label ?? r.effectiveness}
                   </span>
@@ -243,8 +271,9 @@ function Detail() {
             )}
 
             {r.iteaf_warning && (
-              <p className="mt-3 rounded-lg bg-amber/20 px-3 py-2 text-xs font-semibold text-terra">
-                ⚠️ Inspección ITEAF caducada
+              <p className="mt-3 flex items-center gap-2 rounded-xl bg-amber/15 px-3 py-2.5 text-xs font-semibold text-terra">
+                <Icon name="alert-triangle" className="h-4 w-4 shrink-0" />
+                Inspección ITEAF caducada
               </p>
             )}
 

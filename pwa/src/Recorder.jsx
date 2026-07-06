@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { createRecord } from './api.js'
+import Icon from './Icon.jsx'
 
 // Records an audio note and uploads it to the backend, which transcribes,
 // extracts the legal fields, validates and persists it. `onSaved` lets the
@@ -105,23 +106,34 @@ function Recorder({ onSaved }) {
   return (
     <div className="flex flex-col items-center">
       {/* Big round record button: olive when idle, terracotta + pulsing while
-          recording. One button toggles both. Disabled during an upload. */}
-      <button
-        type="button"
-        onClick={isRecording ? stopRecording : startRecording}
-        disabled={upload === 'sending'}
-        className={`flex h-40 w-40 flex-col items-center justify-center rounded-full border-4 border-white text-white shadow-xl transition active:scale-95 disabled:opacity-60 ${
-          isRecording ? 'animate-pulse bg-terra' : 'bg-olive'
-        }`}
-      >
-        <span className="text-4xl">🎙️</span>
-        <span className="mt-1 text-sm font-bold tracking-widest">
-          {isRecording ? 'GRABANDO' : 'REGISTRAR'}
-        </span>
-      </button>
+          recording. One button toggles both. Disabled during an upload. A soft
+          expanding ring behind it gives the recording state a live "listening"
+          feel; the mic glyph replaces the old emoji. */}
+      <div className="relative flex h-44 w-44 items-center justify-center">
+        {isRecording && (
+          <span className="absolute inset-0 animate-ping rounded-full bg-terra/25" />
+        )}
+        <button
+          type="button"
+          onClick={isRecording ? stopRecording : startRecording}
+          disabled={upload === 'sending'}
+          className={`relative flex h-40 w-40 flex-col items-center justify-center rounded-full text-white shadow-float ring-4 ring-white/70 transition active:scale-95 disabled:opacity-60 ${
+            isRecording ? 'bg-terra' : 'bg-gradient-to-b from-olive to-olive-d'
+          }`}
+        >
+          <Icon
+            name={isRecording ? 'stop' : 'mic'}
+            className="h-9 w-9"
+            strokeWidth={isRecording ? 0 : 2}
+          />
+          <span className="mt-1.5 text-xs font-bold tracking-[0.18em]">
+            {isRecording ? 'GRABANDO' : 'REGISTRAR'}
+          </span>
+        </button>
+      </div>
 
       {/* Hint text under the button. */}
-      <p className="mt-5 max-w-[15rem] text-center text-sm leading-relaxed text-ink">
+      <p className="mt-6 max-w-[15rem] text-center text-sm leading-relaxed text-ink">
         {isRecording
           ? 'Pulsa de nuevo para terminar la grabación.'
           : 'Dicta una observación o una prescripción. El sistema reconoce cuál es.'}
@@ -129,16 +141,24 @@ function Recorder({ onSaved }) {
 
       {/* Saved confirmation (clears the preview). */}
       {upload === 'done' && (
-        <p className="mt-4 text-sm font-semibold text-moss">✅ Registro guardado.</p>
+        <p className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-moss">
+          <Icon name="check-circle" className="h-4 w-4" />
+          Registro guardado.
+        </p>
       )}
 
       {/* Any error: mic access, or the backend's Spanish message. */}
-      {error && <p className="mt-4 max-w-[16rem] text-center text-sm text-terra">{error}</p>}
+      {error && (
+        <p className="mt-4 flex max-w-[17rem] items-start gap-1.5 text-center text-sm text-terra">
+          <Icon name="alert-triangle" className="mt-0.5 h-4 w-4 shrink-0" />
+          <span className="text-left">{error}</span>
+        </p>
+      )}
 
       {/* Review + send: appears once there is a finished take. */}
       {take && (
-        <div className="mt-8 w-full max-w-xs">
-          <p className="mb-2 text-xs font-bold uppercase tracking-wider text-ink">
+        <div className="mt-8 w-full max-w-xs rounded-2xl border border-line bg-card p-4 shadow-card">
+          <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-ink">
             Tu grabación
           </p>
           <audio controls src={take.url} className="w-full" />
@@ -146,7 +166,7 @@ function Recorder({ onSaved }) {
             type="button"
             onClick={submit}
             disabled={upload === 'sending'}
-            className="mt-4 w-full rounded-lg bg-olive py-3 font-bold text-white shadow transition active:scale-[0.98] disabled:opacity-60"
+            className="mt-4 w-full rounded-xl bg-olive py-3 font-bold text-white shadow-card transition hover:bg-olive-d active:scale-[0.98] disabled:opacity-60"
           >
             {upload === 'sending'
               ? 'Procesando…'

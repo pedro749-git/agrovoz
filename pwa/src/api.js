@@ -56,9 +56,17 @@ export async function createRecord({ audioBlob, transactionId, deviceTimestamp }
   return unwrap(response)
 }
 
-// GET /api/interventions — the advisor's records, newest first.
-export async function listInterventions() {
-  const response = await fetch('/api/interventions', {
+// GET /api/interventions — the advisor's records, newest first. Optional `from`
+// and `to` are civil dates (YYYY-MM-DD) AS SEEN IN SPAIN, both inclusive: the
+// Home list asks for today (from == to), the history screen for a wider span.
+// The backend maps them to the exact UTC window, so the client sends plain
+// Madrid dates and never juggles timezones itself.
+export async function listInterventions({ from, to } = {}) {
+  const params = new URLSearchParams()
+  if (from) params.set('from', from)
+  if (to) params.set('to', to)
+  const query = params.toString()
+  const response = await fetch(`/api/interventions${query ? `?${query}` : ''}`, {
     headers: await authHeader(),
   })
   return unwrap(response)

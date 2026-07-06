@@ -14,10 +14,20 @@ shaping lives in ``presenters`` — this module is routing + error mapping.
 """
 
 import logging
-from datetime import date, datetime, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from uuid import UUID, uuid5
+from zoneinfo import ZoneInfo
 
-from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, Request, UploadFile
+from fastapi import (
+    BackgroundTasks,
+    Depends,
+    FastAPI,
+    File,
+    Form,
+    Query,
+    Request,
+    UploadFile,
+)
 from fastapi.responses import JSONResponse
 
 from app.adapters.inbound import presenters
@@ -44,6 +54,10 @@ _NOT_FOUND_CODES = {
     "INTERVENTION_NOT_FOUND",
     "HOLDING_NOT_FOUND",
 }
+
+# The advisor's civil timezone. A "day" in the UI (today's list, a history range)
+# is decided here (rule 9), then mapped to a precise UTC window for the DB.
+_MADRID = ZoneInfo("Europe/Madrid")
 
 app = FastAPI(title="GIP Advisor API")
 
@@ -150,18 +164,39 @@ async def create_record(
 @app.get("/api/interventions")
 async def list_interventions(
     state: LifecycleState | None = None,
+    date_from: date | None = Query(None, alias="from"),
+    date_to: date | None = Query(None, alias="to"),
     advisor_id: UUID = Depends(current_advisor_id),
 ) -> JSONResponse:
-    """The advisor's interventions for the PWA Home list (spec §7).
+    """The advisor's interventions for the PWA Home list and history (spec §7).
 
     Scoped to the authenticated advisor (same dependency as POST). Optional
     ``?state=`` filters by lifecycle; FastAPI validates it against the enum, so a
-    bad value is a 422 before this runs. Newest first. No presigned PDF links
-    here (one OSS call per row would not scale) — each item carries ``has_pdf``
-    and the detail view signs the URL on demand.
+    bad value is a 422 before this runs.
+
+    ``?from=&to=`` are civil dates AS SEEN IN SPAIN (rule 9), both inclusive: the
+    Home list asks for today (``from==to``), the history screen for a wider span.
+    We turn them into the exact UTC window ``[from 00:00 Madrid, (to+1d) 00:00
+    Madrid)`` here — DST-correct via zoneinfo — so the DB filter on the UTC
+    ``created_at`` is precise, not the day-boundary fuzz a naive civil-date
+    comparison would give. Newest first. No presigned PDF links here (one OSS
+    call per row would not scale) — each item carries ``has_pdf`` and the detail
+    view signs the URL on demand.
     """
+    since = (
+        datetime.combine(date_from, time.min, _MADRID).astimezone(timezone.utc)
+        if date_from is not None
+        else None
+    )
+    until = (
+        datetime.combine(date_to + timedelta(days=1), time.min, _MADRID).astimezone(
+            timezone.utc
+        )
+        if date_to is not None
+        else None
+    )
     interventions = await container.repository.list_interventions(
-        advisor_id, state=state
+        advisor_id, state=state, since=since, until=until
     )
     return JSONResponse(content=[presenters.record_fields(i) for i in interventions])
 
