@@ -31,6 +31,20 @@ from app.core.domain.states import LifecycleState
 
 logger = logging.getLogger(__name__)
 
+# Configure logging once, at the process entry point (uvicorn imports this
+# module). Puts a handler on the root logger so every ``app.*`` logger — INFO
+# and above — is shown, with a timestamp and the emitting module.
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
+# The Supabase client talks over httpx, which logs every REST call ("HTTP
+# Request: POST ...") at INFO. That is noise next to our own timing logs, so we
+# raise httpx/httpcore to WARNING: their per-request lines are hidden, but real
+# problems (a failed connection) still surface.
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+
 # Domain errors that mean "the advisor referenced something that does not
 # exist" map to 404; every other business-rule violation is a 422.
 _NOT_FOUND_CODES = {

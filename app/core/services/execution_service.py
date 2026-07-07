@@ -27,6 +27,7 @@ from app.core.domain.models import Intervention, Plot
 from app.core.domain.states import LifecycleState, transition
 from app.core.ports.repository import Repository
 from app.core.ports.weather import Weather
+from app.core.services.timing import timed
 from app.core.services.validation_service import validate_legality
 
 logger = logging.getLogger(__name__)
@@ -65,6 +66,32 @@ class ExecutionService:
         Every other field is optional: None means "keep the prescribed value /
         the holding default".
         """
+        with timed("FLUJO B: confirm (total)"):
+            return await self._confirm(
+                intervention_id=intervention_id,
+                advisor_id=advisor_id,
+                treatment_date=treatment_date,
+                applied_dose=applied_dose,
+                treated_area_ha=treated_area_ha,
+                operator_name=operator_name,
+                operator_ropo=operator_ropo,
+                spray_volume_l_ha=spray_volume_l_ha,
+                delivery_note_number=delivery_note_number,
+            )
+
+    async def _confirm(
+        self,
+        *,
+        intervention_id: UUID,
+        advisor_id: UUID,
+        treatment_date: datetime,
+        applied_dose: float | None = None,
+        treated_area_ha: float | None = None,
+        operator_name: str | None = None,
+        operator_ropo: str | None = None,
+        spray_volume_l_ha: float | None = None,
+        delivery_note_number: str | None = None,
+    ) -> Intervention:
         # Load scoped to the advisor: requesting someone else's record is an
         # indistinguishable 404 (you cannot probe what is not yours).
         intervention = await self._repo.get_intervention(intervention_id, advisor_id)
@@ -154,9 +181,10 @@ class ExecutionService:
             logger.warning("Plot %s has no coordinates; weather deferred", plot.id)
             return
         try:
-            conditions = await self._weather.conditions_at(
-                lat=plot.lat, lon=plot.lon, day=intervention.treatment_date.date()
-            )
+            with timed("FLUJO B: weather (AEMET)"):
+                conditions = await self._weather.conditions_at(
+                    lat=plot.lat, lon=plot.lon, day=intervention.treatment_date.date()
+                )
         except WeatherError:
             intervention.audit_state = "WEATHER_PENDING"
             logger.warning(

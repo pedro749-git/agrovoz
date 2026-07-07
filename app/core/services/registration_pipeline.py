@@ -29,6 +29,7 @@ from app.core.ports.pdf_generator import PdfGenerator
 from app.core.ports.repository import Repository
 from app.core.ports.storage import Storage
 from app.core.ports.transcriber import Transcriber
+from app.core.services.timing import timed
 from app.core.services.validation_service import validate_registration
 
 logger = logging.getLogger(__name__)
@@ -65,6 +66,22 @@ class RegistrationPipeline:
         transaction_id: UUID,
         device_timestamp: datetime,
     ) -> Intervention:
+        with timed("FLUJO A: register (total)"):
+            return await self._register(
+                audio=audio,
+                advisor_id=advisor_id,
+                transaction_id=transaction_id,
+                device_timestamp=device_timestamp,
+            )
+
+    async def _register(
+        self,
+        *,
+        audio: bytes,
+        advisor_id: UUID,
+        transaction_id: UUID,
+        device_timestamp: datetime,
+    ) -> Intervention:
         # 1. Idempotency (hard rule 3): a retry returns the existing row.
         existing = await self._repo.get_intervention_by_transaction_id(transaction_id)
         if existing is not None:
@@ -76,8 +93,11 @@ class RegistrationPipeline:
             raise DomainError("La cuenta del asesor no está activa.")
 
         # 3. Transcribe + extract (LLM output validated by ExtractedFields).
-        transcription = await self._transcriber.transcribe(audio)
-        fields = await self._extractor.extract(transcription)
+        #    The two Qwen round-trips are the usual latency hot spot -> timed.
+        with timed("FLUJO A: transcribe (Qwen audio)"):
+            transcription = await self._transcriber.transcribe(audio)
+        with timed("FLUJO A: extract (Qwen instruct)"):
+            fields = await self._extractor.extract(transcription)
 
         # 4. Resolve the plot (always mandatory).
         plot = await self._repo.get_plot_by_alias(advisor_id, fields.plot_alias)
@@ -163,19 +183,21 @@ class RegistrationPipeline:
                 )
                 return None
             # PDF building is pure CPU (no I/O) -> run off the event loop.
-            pdf = await asyncio.to_thread(
-                self._pdf.generate_prescription,
-                intervention=intervention,
-                advisor=advisor,
-                holding=holding,
-                plot=plot,
-                product=product,
-                equipment=equipment,
-            )
+            with timed("FLUJO A: render prescription PDF"):
+                pdf = await asyncio.to_thread(
+                    self._pdf.generate_prescription,
+                    intervention=intervention,
+                    advisor=advisor,
+                    holding=holding,
+                    plot=plot,
+                    product=product,
+                    equipment=equipment,
+                )
             key = f"prescriptions/{transaction_id}.pdf"
-            await self._storage.upload(
-                data=pdf, key=key, content_type="application/pdf"
-            )
+            with timed("FLUJO A: upload prescription PDF (OSS)"):
+                await self._storage.upload(
+                    data=pdf, key=key, content_type="application/pdf"
+                )
             return key
         except Exception:
             # PDF render OR OSS upload failed: save the record anyway. The

@@ -936,3 +936,16 @@ This file becomes the thesis' design chapter.
   → text via callback) · the effectiveness assessment already had it and the
   campaign-validation remarks needed the same, so one component serves both
   instead of duplicating the MediaRecorder state machine · 2026-07-06
+- Logging turned on at INFO via a single `basicConfig` in the entry-point module
+  (`api.py`, imported by uvicorn) · chosen over uvicorn's `--log-level` (only
+  configures uvicorn's own loggers, not our `app.*`) and over a per-service setup
+  (must run once, at the process entry point) · httpx/httpcore raised to WARNING
+  to hide the Supabase client's per-request "HTTP Request:" INFO noise · 2026-07-07
+- Added per-stage timing logs (helper `services/timing.py`: a `timed("label")`
+  context manager logging elapsed ms at INFO) after a "runs a bit slow" report ·
+  instruments the I/O hot spots (both Qwen calls, PDF render, OSS upload, AEMET)
+  plus a per-flow total; totals wrap a thin `register`/`confirm` over an inner
+  `_register`/`_confirm` so the existing body is not re-indented · measured a
+  registration at ~5.5 s = Qwen audio 2.7 s + Qwen extract 1.4 s (~73%) + OSS
+  0.5 s + Supabase ~0.9 s (7 sequential REST calls) + PDF 28 ms: the LLM
+  round-trips dominate and are inherent, so no optimization pursued · 2026-07-07
