@@ -161,3 +161,23 @@ class Repository(ABC):
     async def list_plots(self, holding_id: UUID) -> list[Plot]:
         """A holding's plots — shown under each holding on the validation screen
         so the advisor recognises it. Filters ``deleted_at IS NULL``."""
+
+    # ── Onboarding writes (hackathon self-signup, TEMPORARY) ──
+    # Insert the four entities OnboardingService seeds for a fresh judge. They
+    # are generic single-row inserts (an admin alta flow would reuse them), so
+    # they can stay even if the hackathon signup is later removed.
+    @abstractmethod
+    async def save_advisor(self, advisor: Advisor) -> Advisor:
+        """Insert and return the persisted advisor (with DB-generated id)."""
+
+    @abstractmethod
+    async def save_holding(self, holding: Holding) -> Holding:
+        """Insert and return the persisted holding."""
+
+    @abstractmethod
+    async def save_plot(self, plot: Plot) -> Plot:
+        """Insert and return the persisted plot."""
+
+    @abstractmethod
+    async def save_equipment(self, equipment: Equipment) -> Equipment:
+        """Insert and return the persisted equipment."""

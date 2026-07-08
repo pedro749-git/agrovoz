@@ -420,3 +420,28 @@ class SupabaseRepository(Repository):
             .order("voice_alias", desc=False)
         )
         return [_deserialize(Plot, row) for row in res.data]
+
+    # ── Onboarding writes (hackathon self-signup, TEMPORARY) ──
+    async def _insert_one(self, table: str, obj, cls):
+        """Insert one domain dataclass and return it re-read with DB defaults.
+
+        A plain single-row insert (no idempotency race to resolve like
+        save_intervention): OnboardingService already guards against a second
+        run by checking for an existing advisor first. ``_run`` maps any
+        PostgREST/network failure to a RepositoryError like every other write.
+        """
+        client = await get_client()
+        res = await _run(client.table(table).insert(_serialize(obj)))
+        return _deserialize(cls, res.data[0])
+
+    async def save_advisor(self, advisor: Advisor) -> Advisor:
+        return await self._insert_one("advisors", advisor, Advisor)
+
+    async def save_holding(self, holding: Holding) -> Holding:
+        return await self._insert_one("holdings", holding, Holding)
+
+    async def save_plot(self, plot: Plot) -> Plot:
+        return await self._insert_one("plots", plot, Plot)
+
+    async def save_equipment(self, equipment: Equipment) -> Equipment:
+        return await self._insert_one("equipment", equipment, Equipment)

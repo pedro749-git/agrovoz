@@ -14,6 +14,7 @@ from app.config.settings import settings
 from app.core.services.assessment_service import AssessmentService
 from app.core.services.campaign_validation_service import CampaignValidationService
 from app.core.services.execution_service import ExecutionService
+from app.core.services.onboarding_service import OnboardingService
 from app.core.services.registration_pipeline import RegistrationPipeline
 
 transcriber = QwenTranscriber()
@@ -33,3 +34,7 @@ assessment_service = AssessmentService(repository)
 campaign_validation_service = CampaignValidationService(
     repository, pdf_generator, storage
 )
+# Hackathon self-signup only (TEMPORARY): seeds a demo advisor + sandbox for a
+# fresh Supabase user. Delete alongside the flag and /api/bootstrap after the
+# event.
+onboarding_service = OnboardingService(repository)

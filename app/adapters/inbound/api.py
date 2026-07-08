@@ -17,7 +17,12 @@ from fastapi import Depends, FastAPI, File, Form, Query, Request, UploadFile
 from fastapi.responses import JSONResponse
 
 from app.adapters.inbound import presenters
-from app.adapters.inbound.auth import AuthError, current_advisor_id
+from app.adapters.inbound.auth import (
+    AuthError,
+    AuthUser,
+    current_advisor_id,
+    current_auth_user,
+)
 from app.config import container
 from app.config.settings import settings
 from app.core.domain.errors import DomainError, InfrastructureError
@@ -129,6 +134,28 @@ async def health() -> dict:
 # ══════════════════════════════════════════════════════════════════════════════
 # PWA REST API — the live inbound (FLUJO A/B/C), synchronous JSON the UI awaits
 # ══════════════════════════════════════════════════════════════════════════════
+
+
+@app.post("/api/bootstrap")
+async def bootstrap(
+    user: AuthUser = Depends(current_auth_user),
+) -> JSONResponse:
+    """Provision a demo advisor + sandbox for a just-signed-up user (hackathon
+    self-signup, TEMPORARY — see docs/decisions.md and settings.hackathon_signup_enabled).
+
+    This is the ONE endpoint that runs before an advisor row exists, so it uses
+    ``current_auth_user`` (verifies the token only) instead of
+    ``current_advisor_id`` (which would 401 a user with no advisor yet). The
+    service is idempotent: the PWA may call it on every "just signed up" render.
+
+    When the flag is off (the default / permanent state) the endpoint pretends
+    not to exist — a 404 — so the closed-login design leaks nothing about it."""
+    if not settings.hackathon_signup_enabled:
+        return _error(404, "NOT_FOUND", "No encontrado.")
+    advisor = await container.onboarding_service.bootstrap_demo_advisor(
+        user.id, user.email
+    )
+    return JSONResponse(content={"advisor_id": str(advisor.id)})
 
 
 @app.post("/api/records")

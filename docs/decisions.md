@@ -949,3 +949,43 @@ This file becomes the thesis' design chapter.
   registration at ~5.5 s = Qwen audio 2.7 s + Qwen extract 1.4 s (~73%) + OSS
   0.5 s + Supabase ~0.9 s (7 sequential REST calls) + PDF 28 ms: the LLM
   round-trips dominate and are inherent, so no optimization pursued · 2026-07-07
+- Temporary hackathon self-signup (behind flags, OFF by default) · the permanent
+  design is admin-only alta of advisors (no self-signup), but a hackathon judge
+  needs to try the voice flow without the admin creating an account first ·
+  enabled by `settings.hackathon_signup_enabled` (backend) + `VITE_HACKATHON_SIGNUP`
+  (PWA) · the PWA shows a "Crear cuenta" path reusing the OTP flow with
+  `shouldCreateUser: true`; on first login the user has a valid token but NO
+  advisor row, so `POST /api/bootstrap` (new `current_auth_user` dependency that
+  verifies the token WITHOUT requiring an advisor — `current_advisor_id` would
+  401) provisions an ACTIVE demo advisor + a seeded sandbox (holding + 2 plots +
+  "tractor") via `OnboardingService`, idempotent, matching the spec's canonical
+  demo audio ("Finca de Pepe", araña roja on citrus) so recording works out of
+  the box · products (Abamectina) are the shared MAPA catalog, not seeded · the
+  only genuinely UNIQUE column that could collide across judges is `advisors.dni`
+  (verified in the migrations), so demo ids carry an 8-hex slice of the auth uid ·
+  App.jsx gates Home behind the bootstrap (sessionStorage `pending_bootstrap`
+  flag) so the first list call never 401s on a missing advisor · to remove after
+  the event: delete the flag, `/api/bootstrap`, `OnboardingService`,
+  `current_auth_user`/`AuthUser`, the four `save_*` ports (optional, generic) and
+  the PWA signup path · 2026-07-08
+- Signup captcha deferred, not built · with self-signup the open OTP endpoint is a
+  real abuse surface (bots, email-bomb, cost), unlike the closed login where a
+  captcha added only friction · chosen: Supabase-native Cloudflare Turnstile
+  (config toggle + token on the signInWithOtp call), not a custom captcha · left
+  wired but inert (`getCaptchaToken()` returns undefined until `VITE_TURNSTILE_SITE_KEY`
+  is set and the widget mounted) so it activates with no code change · Supabase's
+  built-in rate limiting is the first line meanwhile · 2026-07-08
+- Turnstile captcha implemented (was deferred) · Cloudflare Turnstile widget
+  rendered on the whole login screen, not just signup, because Supabase's captcha
+  protection is PROJECT-WIDE: once enabled it gates every credential endpoint
+  (signInWithOtp for code + signup, signInWithPassword), so the token must ride on
+  all three; verifyOtp is not gated and carries none · script loaded lazily from
+  the login screen (explicit-render mode) so a normal visit never contacts
+  Cloudflare · single widget instance, hidden (not unmounted) on the code-verify
+  step to stay stable; token is single-use so we reset() after each credential
+  call · fully inert until VITE_TURNSTILE_SITE_KEY is set AND Turnstile is enabled
+  in Supabase Auth (with the secret key) — both flip together or login breaks ·
+  no CSP change needed: verified the repo enforces none (the decisions note about
+  "the PWA's CSP" was CSP-readiness / a deploy-layer policy, not in the code) · if
+  a deploy-layer CSP exists, allow challenges.cloudflare.com in script-src +
+  frame-src · 2026-07-08

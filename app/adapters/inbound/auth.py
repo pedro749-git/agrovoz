@@ -12,6 +12,7 @@ advisor is rejected (401) — being authenticated is not being authorized.
 """
 
 import asyncio
+from dataclasses import dataclass
 from uuid import UUID
 
 import jwt
@@ -25,6 +26,20 @@ from app.config.settings import settings
 
 class AuthError(Exception):
     """Authentication/authorization failure -> HTTP 401 at the API boundary."""
+
+
+@dataclass(frozen=True)
+class AuthUser:
+    """A verified Supabase user, BEFORE resolving an advisor row.
+
+    Only the onboarding/bootstrap path uses this: a judge who just signed up has
+    a valid token but no ``advisors`` row yet, so ``current_advisor_id`` would
+    reject them with a 401. This carries just enough to CREATE that row —
+    ``id`` is the token ``sub`` (auth.users id), ``email`` seeds the demo
+    advisor's display name."""
+
+    id: UUID
+    email: str | None
 
 
 # Supabase publishes the signing key's public half at the JWKS endpoint;
@@ -77,3 +92,25 @@ async def current_advisor_id(
     if advisor is None:
         raise AuthError("La cuenta no está asociada a ningún asesor.")
     return advisor.id
+
+
+async def current_auth_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
+) -> AuthUser:
+    """Like ``current_advisor_id`` but stops after "is this a valid Supabase
+    user?" — it does NOT require an advisor row.
+
+    The onboarding endpoint (hackathon self-signup, TEMPORARY) is the only caller:
+    a freshly signed-up judge has a valid token but no advisor yet, and this
+    dependency is what lets ``/api/bootstrap`` create one. Every other endpoint
+    keeps using ``current_advisor_id``, which additionally enforces "and you are
+    a registered advisor". The token verification below is identical — only the
+    advisor lookup is dropped."""
+    if credentials is None:
+        raise AuthError("Falta el token de autenticación.")
+    try:
+        claims = await asyncio.to_thread(_verify, credentials.credentials)
+    except Exception as exc:  # any PyJWT error collapses into one 401
+        raise AuthError("Token inválido o caducado.") from exc
+
+    return AuthUser(id=UUID(claims["sub"]), email=claims.get("email"))

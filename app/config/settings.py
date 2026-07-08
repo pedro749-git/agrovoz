@@ -29,6 +29,15 @@ class Settings(BaseSettings):
     # execution flags ``iteaf_warning`` (a non-blocking notice, never a block).
     iteaf_validity_years: int = 3
 
+    # Hackathon self-signup (TEMPORARY — decisions.md). Off by default: the
+    # permanent design is admin-only alta of advisors (no self-signup). When ON,
+    # the PWA exposes a "Crear cuenta" tab and ``POST /api/bootstrap`` provisions
+    # a fresh Supabase user with a demo advisor + seeded holding/plots/equipment
+    # so a hackathon judge can try the voice flow immediately. Flip to False (or
+    # delete the flag, the endpoint and OnboardingService) to restore the closed
+    # login after the event.
+    hackathon_signup_enabled: bool = False
+
     # Alibaba Cloud OSS
     oss_access_key_id: str = ""
     oss_access_key_secret: SecretStr = SecretStr("")

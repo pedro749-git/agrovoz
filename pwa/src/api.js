@@ -56,6 +56,18 @@ export async function createRecord({ audioBlob, transactionId, deviceTimestamp }
   return unwrap(response)
 }
 
+// POST /api/bootstrap — provisions the demo advisor + sandbox for a user who
+// just self-signed-up (hackathon only, TEMPORARY). Idempotent: safe to call on
+// every "just signed up" render. The backend 404s this when the hackathon flag
+// is off, so callers should only reach it through the signup path.
+export async function bootstrap() {
+  const response = await fetch('/api/bootstrap', {
+    method: 'POST',
+    headers: await authHeader(),
+  })
+  return unwrap(response)
+}
+
 // GET /api/interventions — the advisor's records, newest first. Optional `from`
 // and `to` are civil dates (YYYY-MM-DD) AS SEEN IN SPAIN, both inclusive: the
 // Home list asks for today (from == to), the history screen for a wider span.
