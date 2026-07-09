@@ -28,30 +28,50 @@ async function unwrap(response) {
   throw new Error(mensaje)
 }
 
-// POST /api/records — uploads one audio note. The backend transcribes,
-// extracts, validates and persists, returning the saved record (or a 4xx whose
-// `mensaje` we surface, e.g. a dose/area legal error).
-//
-// `transactionId` and `deviceTimestamp` are captured by the caller when the
-// recording STOPS, not here, so a retry of the same take reuses both:
-//   - transactionId (crypto.randomUUID) is the idempotency key (hard rule 3):
-//     a flaky-network retry hits the existing row instead of duplicating a
-//     legal record.
-//   - deviceTimestamp is the device clock (hard rule 2): the treatment date is
-//     when the advisor spoke in the field, never when the server received it.
-export async function createRecord({ audioBlob, transactionId, deviceTimestamp }) {
+// POST /api/records/preview — phase 1 (M8): uploads one audio note and gets back
+// the transcription + extracted fields, WITHOUT persisting. The advisor reviews
+// and corrects them before committing (hard rule 4: nothing from the LLM reaches
+// the legal record unseen). Side-effect free, so it carries no idempotency key —
+// a failed preview is simply retried.
+export async function previewRecord(audioBlob) {
   const form = new FormData()
-  form.append('transaction_id', transactionId)
-  form.append('device_timestamp', deviceTimestamp)
   // A filename lets the backend infer the audio type (MediaRecorder gives webm).
   form.append('audio', audioBlob, 'note.webm')
 
-  const response = await fetch('/api/records', {
+  const response = await fetch('/api/records/preview', {
     method: 'POST',
     // NOTE: do not set Content-Type — the browser sets it WITH the multipart
     // boundary. Setting it by hand would corrupt the upload.
     headers: await authHeader(),
     body: form,
+  })
+  return unwrap(response) // { transcription, fields }
+}
+
+// POST /api/records — phase 2 (M8): persists the advisor-REVIEWED fields,
+// returning the saved record (or a 4xx whose `mensaje` we surface, e.g. a
+// dose/area legal error the advisor fixes and resubmits). JSON body, not
+// FormData: `fields` is a nested object (ExtractedFields) that form-encoding
+// can't carry.
+//
+// `transactionId` and `deviceTimestamp` were captured when the recording STOPPED
+// and are reused on retry:
+//   - transactionId (crypto.randomUUID) is the idempotency key (hard rule 3): a
+//     flaky-network retry hits the existing row instead of duplicating a record.
+//   - deviceTimestamp is the device clock (hard rule 2): the treatment date is
+//     when the advisor spoke in the field, never when the server received it.
+// `transcription` is the ORIGINAL audio transcription, stored as the audit trail
+// regardless of what the advisor edited.
+export async function commitRecord({ fields, transactionId, deviceTimestamp, transcription }) {
+  const response = await fetch('/api/records', {
+    method: 'POST',
+    headers: { ...(await authHeader()), 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      fields,
+      transaction_id: transactionId,
+      device_timestamp: deviceTimestamp,
+      transcription,
+    }),
   })
   return unwrap(response)
 }
@@ -92,7 +112,7 @@ export async function listInterventions({ from, to } = {}) {
 // operatorRopo, deliveryNoteNumber) are sent only when the advisor types them; when omitted the
 // backend falls back to the prescribed dose / holding default operator and
 // re-validates legality with whatever real values arrive. Form-encoded to match
-// the backend endpoint (Form(...)), exactly like createRecord.
+// the backend endpoint (Form(...)), like the other write endpoints.
 export async function confirmExecution(
   interventionId,
   {

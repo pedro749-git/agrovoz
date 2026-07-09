@@ -168,19 +168,15 @@ async def preview_record(
     advisor to REVIEW, WITHOUT persisting (hard rule 4 — nothing from the LLM
     reaches the legal record unseen).
 
-    Returns the raw transcription ("lo que dictaste") and the extracted fields the
-    PWA prefills into an editable form; the advisor corrects them and POSTs to
+    Returns the transcription ("lo que dictaste"), the extracted fields CANONICALIZED
+    against the catalog, and a per-identity resolution marker (see presenters). The
+    PWA prefills an editable form; the advisor corrects any miss and POSTs to
     /api/records (commit). Side-effect free, so no transaction_id/device_timestamp
     here — those are sent at commit. A provider failure surfaces as a 503."""
     preview = await container.pipeline.preview(
         audio=await audio.read(), advisor_id=advisor_id
     )
-    return JSONResponse(
-        content={
-            "transcription": preview.transcription,
-            "fields": preview.fields.model_dump(),
-        }
-    )
+    return JSONResponse(content=presenters.preview_result(preview))
 
 
 @app.post("/api/records")

@@ -38,6 +38,18 @@ rule: **each milestone must work end-to-end before starting the next.**
 - [x] M6 — Effectiveness assessment + delivery-note number
 - [x] M7 — Campaign validations (signed PDF)
 
+M1–M7 = the planned MVP. The hackathon deadline moved to 2026-07-20, so post-M7
+continues the same numbering as a post-MVP hardening phase (M8+).
+
+- [~] M8 — Review-before-persist + correction of interventions.
+      - [x] M8.1 — FLUJO A split into preview (transcribe+extract, no save) +
+            commit (persist reviewed fields); preview resolves + canonicalizes
+            dictated names against the catalog (hard rule 4)
+      - [ ] M8.2 — Soft-delete + correction (supersede = new record + soft-delete
+            of the old one, hard rules 1/7)
+      - [x] M8.3 — Two-phase PWA record flow (record → review → confirm), with
+            per-field ✓/⚠️ resolution markers + plot crop/SIGPAC (verified on a phone)
+
 **Update this checklist when a milestone is completed.** If the user asks for
 something from a future milestone, point it out and ask before implementing.
 

@@ -86,23 +86,34 @@ def test_post_record_200(client, monkeypatch):
 
 
 def test_preview_record_200(client, monkeypatch):
+    from app.core.domain.models import Product
     from app.core.domain.schemas import ExtractedFields
     from app.core.services.registration_pipeline import PreviewResult
 
+    plot = Plot(
+        holding_id=uuid4(), voice_alias="Finca de Pepe", crop="Limonero",
+        enclosure_area_ha=3.5, sigpac_province="30", sigpac_municipality="015",
+        sigpac_polygon="012", sigpac_parcel="00045", sigpac_enclosure="003", id=uuid4())
+    product = Product(
+        registration_number="ES-1", trade_name="Abamectina", active_substance="abamectina",
+        authorized=True, max_allowed_dose=1.5, dose_unit="L/ha", pre_harvest_interval_days=14)
     preview = PreviewResult(
         transcription="Finca de Pepe, abamectina, araña roja, tractor",
         fields=ExtractedFields(
             record_type="PRESCRIPTION", plot_alias="Finca de Pepe",
             product_name="Abamectina", dose=1.5, dose_unit="L/ha",
-            target_pest="araña roja", equipment_alias="tractor"))
+            target_pest="araña roja", equipment_alias="tractor"),
+        plot=plot, product=product, equipment=None)  # equipment unresolved -> flagged
     monkeypatch.setattr(container, "pipeline", FakePipeline(preview=preview))
     r = client.post("/api/records/preview",
                     files={"audio": ("a.ogg", b"x", "audio/ogg")})
     assert r.status_code == 200, r.text
     body = r.json()
-    assert body["transcription"].startswith("Finca de Pepe")
     assert body["fields"]["product_name"] == "Abamectina"
-    assert body["fields"]["dose"] == 1.5
+    assert body["resolution"]["plot"] == {
+        "found": True, "crop": "Limonero", "sigpac": "30:015:012:00045:003"}
+    assert body["resolution"]["product"]["found"] is True
+    assert body["resolution"]["equipment"]["found"] is False
 
 
 def test_domain_error_maps_to_422(client, monkeypatch):

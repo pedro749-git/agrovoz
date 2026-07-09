@@ -172,8 +172,29 @@ def test_preview_extracts_without_persisting():
     repo = FakeRepo()
     preview = asyncio.run(_pipeline(fields, repo).preview(audio=b"x", advisor_id=ADV))
     assert preview.transcription == "texto dictado"
-    assert preview.fields is fields
+    assert preview.fields.plot_alias == "Finca de Pepe"
+    assert preview.plot is not None  # resolved against the catalog
     assert repo.saved is None  # phase 1 never touches the DB
+
+
+def test_preview_canonicalizes_dictated_names():
+    # The ASR mis-hears the product; preview replaces it with the catalog name so
+    # the advisor reviews "Abamectina", not the raw text, and flags a real match.
+    repo = FakeRepo()
+
+    async def canonical_product(name):
+        return Product(registration_number="ES-1", trade_name="Abamectina",
+                       active_substance="abamectina", authorized=True,
+                       max_allowed_dose=1.5, dose_unit="L/ha", pre_harvest_interval_days=14)
+
+    repo.get_product_by_name = canonical_product
+    fields = ExtractedFields(
+        record_type="PRESCRIPTION", plot_alias="Finca de Pepe", product_name="amavectina",
+        dose=1.0, dose_unit="L/ha", target_pest="araña roja", equipment_alias="tractor")
+    preview = asyncio.run(_pipeline(fields, repo).preview(audio=b"x", advisor_id=ADV))
+    assert preview.fields.product_name == "Abamectina"  # canonicalized
+    assert preview.product is not None and preview.equipment is not None
+    assert repo.saved is None
 
 
 def test_commit_stores_original_transcription_as_audit_trail():

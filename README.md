@@ -44,10 +44,26 @@ begins.
       validation endpoints) and PWA validation screen grouped by holding and
       campaign, with a 0/2 counter.
 
-Since M7, an incremental polish pass (not a numbered milestone): a PWA visual
-refresh (inline SVG icon set replacing emoji, shared app bar, refined brand
-palette), a **history** screen with a date-range filter (`/api/interventions`
-accepts `?from=&to=`), and voice dictation on the campaign-validation remarks.
+M1–M7 were the planned MVP. Since the hackathon deadline moved to 2026-07-20,
+post-M7 work continues the same numbering as a **post-MVP hardening phase (M8+)**.
+
+- [ ] **M8** (in progress) — Review-before-persist and correction of interventions.
+      - [x] **M8.1** — FLUJO A split into `preview` (transcribe + extract, no save)
+            and `commit` (persist the reviewed fields), so nothing from the LLM
+            reaches the legal record unseen (hard rule 4). `preview` also resolves
+            the dictated names against the catalog and canonicalizes them.
+      - [ ] **M8.2** — Soft-delete of interventions + correction (supersede = new
+            record + soft-delete of the old one, hard rules 1/7).
+      - [x] **M8.3** — **Verified on a real phone.** Two-phase PWA record flow:
+            record → review the extracted fields (prefilled with catalog-resolved
+            names, a ✓/⚠️ marker per identity field, the plot's crop/SIGPAC) →
+            confirm and save.
+
+Also, since M7, an incremental polish pass (not a numbered milestone): a PWA
+visual refresh (inline SVG icon set replacing emoji, shared app bar, refined
+brand palette), a **history** screen with a date-range filter
+(`/api/interventions` accepts `?from=&to=`), and voice dictation on the
+campaign-validation remarks.
 
 ## Stack
 

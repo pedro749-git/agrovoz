@@ -18,11 +18,47 @@ from app.core.domain.models import (
     Plot,
     Validation,
 )
+from app.core.services.registration_pipeline import PreviewResult
 
 
 def _iso(value) -> str | None:
     """ISO string for a date/datetime, or None. Both have .isoformat()."""
     return value.isoformat() if value is not None else None
+
+
+def _sigpac(plot: Plot) -> str:
+    """The plot's SIGPAC reference as province:municipality:polygon:parcel:enclosure."""
+    return ":".join(
+        (
+            plot.sigpac_province,
+            plot.sigpac_municipality,
+            plot.sigpac_polygon,
+            plot.sigpac_parcel,
+            plot.sigpac_enclosure,
+        )
+    )
+
+
+def preview_result(preview: PreviewResult) -> dict:
+    """FLUJO A phase-1 projection (M8): the transcription, the CANONICALIZED fields
+    for the review form, and a per-identity resolution marker so the form shows a
+    ✓ (matched a catalog row) or a ⚠️ (fix it). The plot carries crop + SIGPAC when
+    matched, so the advisor can confirm it is the right parcela. product/equipment
+    only carry ``found`` — their canonical name is already in ``fields``."""
+    plot = preview.plot
+    return {
+        "transcription": preview.transcription,
+        "fields": preview.fields.model_dump(),
+        "resolution": {
+            "plot": {
+                "found": plot is not None,
+                "crop": plot.crop if plot else None,
+                "sigpac": _sigpac(plot) if plot else None,
+            },
+            "product": {"found": preview.product is not None},
+            "equipment": {"found": preview.equipment is not None},
+        },
+    }
 
 
 def record_fields(intervention: Intervention) -> dict:
@@ -104,15 +140,7 @@ def intervention_detail(
                     "crop": plot.crop,
                     "variety": plot.variety,
                     "enclosure_area_ha": plot.enclosure_area_ha,
-                    "sigpac": ":".join(
-                        (
-                            plot.sigpac_province,
-                            plot.sigpac_municipality,
-                            plot.sigpac_polygon,
-                            plot.sigpac_parcel,
-                            plot.sigpac_enclosure,
-                        )
-                    ),
+                    "sigpac": _sigpac(plot),
                 }
                 if plot
                 else None

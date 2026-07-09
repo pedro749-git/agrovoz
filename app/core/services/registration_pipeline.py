@@ -51,12 +51,17 @@ _RECORD_TYPE_TO_STATE = {
 
 @dataclass(frozen=True)
 class PreviewResult:
-    """What ``preview`` hands back for the advisor to review before committing:
-    the raw transcription (shown as "lo que dictaste") and the extracted fields
-    (prefilled into the editable form). Nothing is persisted yet."""
+    """The reviewable draft ``preview`` hands back: the transcription ("lo que
+    dictaste"), the extracted fields with the dictated identities CANONICALIZED
+    against the catalog (fuzzy resolution — "amavectina" -> "Abamectina"), and the
+    resolved entities so the form can confirm a match (the plot's crop/SIGPAC) or
+    flag a miss. Nothing is persisted yet."""
 
     transcription: str
     fields: ExtractedFields
+    plot: Plot | None
+    product: Product | None
+    equipment: Equipment | None
 
 
 class RegistrationPipeline:
@@ -98,7 +103,48 @@ class RegistrationPipeline:
         with timed("FLUJO A: extract (Qwen instruct)"):
             fields = await self._extractor.extract(transcription)
 
-        return PreviewResult(transcription=transcription, fields=fields)
+        # Resolve the dictated identities against the catalog and CANONICALIZE the
+        # fields, so the advisor reviews real catalog names ("Abamectina") instead
+        # of the raw, often mis-heard ASR text ("amavectina"). Unmatched values are
+        # left as-is for the advisor to fix; the resolved entities travel too, so
+        # the form can flag a miss and show the plot's crop/SIGPAC for confidence.
+        plot, product, equipment = await self._resolve(fields, advisor_id)
+        fields = fields.model_copy(
+            update={
+                "plot_alias": plot.voice_alias if plot else fields.plot_alias,
+                "product_name": product.trade_name if product else fields.product_name,
+                "equipment_alias": (
+                    equipment.equipment_alias if equipment else fields.equipment_alias
+                ),
+            }
+        )
+        return PreviewResult(
+            transcription=transcription,
+            fields=fields,
+            plot=plot,
+            product=product,
+            equipment=equipment,
+        )
+
+    async def _resolve(
+        self, fields: ExtractedFields, advisor_id: UUID
+    ) -> tuple[Plot | None, Product | None, Equipment | None]:
+        """Fuzzy-resolve the dictated identities against the catalog. Best-effort:
+        None for anything that doesn't match — ``preview`` canonicalizes/flags it,
+        ``commit`` raises on a missing mandatory one. Product and equipment only
+        apply to a treatment; equipment is scoped to the plot's holding, so it
+        needs the plot resolved first (two holdings' "tractor" don't collide)."""
+        plot = await self._repo.get_plot_by_alias(advisor_id, fields.plot_alias)
+        product: Product | None = None
+        equipment: Equipment | None = None
+        if fields.record_type != "OBSERVATION":
+            if fields.product_name:
+                product = await self._repo.get_product_by_name(fields.product_name)
+            if plot is not None and fields.equipment_alias:
+                equipment = await self._repo.get_equipment_by_alias(
+                    plot.holding_id, fields.equipment_alias
+                )
+        return plot, product, equipment
 
     async def commit(
         self,
@@ -143,26 +189,19 @@ class RegistrationPipeline:
         if advisor is None or advisor.account_status != "ACTIVE":
             raise DomainError("La cuenta del asesor no está activa.")
 
-        # 4. Resolve the plot (always mandatory).
-        plot = await self._repo.get_plot_by_alias(advisor_id, fields.plot_alias)
+        # 4-5. Resolve the dictated identities (SHARED with preview) and enforce
+        # the mandatory ones. The advisor reviewed canonical names in preview, so
+        # this normally re-matches exactly; it still raises (defense in depth,
+        # rule 4) if a hand-edited value no longer resolves.
+        plot, product, equipment = await self._resolve(fields, advisor_id)
         if plot is None:
             raise PlotNotFoundError(f"No encuentro la parcela «{fields.plot_alias}».")
-
-        # 5. Resolve product + equipment for PRESCRIPTION/EXECUTION.
-        product: Product | None = None
-        equipment: Equipment | None = None
         if fields.record_type != "OBSERVATION":
             self._require_treatment_fields(fields)
-            product = await self._repo.get_product_by_name(fields.product_name)
             if product is None:
                 raise ProductError(
                     f"No encuentro el producto «{fields.product_name}» en el vademécum."
                 )
-            # Scoped to the plot's holding, not the advisor: the dictated plot
-            # already pins the holding, so two holdings' "tractor" don't collide.
-            equipment = await self._repo.get_equipment_by_alias(
-                plot.holding_id, fields.equipment_alias
-            )
             if equipment is None:
                 raise EquipmentNotFoundError(
                     f"No encuentro el equipo «{fields.equipment_alias}»."

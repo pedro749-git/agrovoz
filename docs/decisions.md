@@ -49,9 +49,30 @@ M8.1 — review-before-persist (split FLUJO A into preview + commit): DONE (back
   and ExtractedFields is exactly their rule-4 gate. So the M5 "introduce request
   models in a dedicated module" note does NOT trigger — Body(...) keeps zero new
   classes/modules.
-- DISCARDED a validation dry-run inside preview (resolve + warn in red before
-  confirming): keep the first slice lean — commit 422s with the clear Spanish
-  message and the advisor re-edits. Add the dry-run later if the loop annoys.
+- Initially DISCARDED any dry-run inside preview, then PARTIALLY REVERSED (user
+  request, same session): preview now RESOLVES identities so the form shows real
+  catalog names, but LEGAL validation (dose/area) still stays in commit — see the
+  M8.1b note below. The split: name resolution is worth the 3 DB reads (the form
+  showing raw "amavectina" is bad UX); dose/area caps still 422 on commit and the
+  advisor re-edits.
+
+M8.1b — resolve identities IN preview so the form shows catalog names (M8.3 UX):
+- preview now fuzzy-resolves plot/product/equipment (the same repo lookups commit
+  does) and CANONICALIZES the fields ("amavectina" -> "Abamectina", "Finca de PP"
+  -> "Finca de Pepe"), so the advisor reviews real catalog names, not the raw
+  mis-heard ASR text. Unmatched values are left as-is to fix.
+- EXTRACTED a shared RegistrationPipeline._resolve(fields, advisor_id) used by BOTH
+  preview (best-effort, no raise — canonicalize + flag) and commit (raises
+  PlotNotFound/Product/Equipment on a missing mandatory). One source of truth; the
+  error PRECEDENCE in commit is unchanged (plot -> missing-field -> product ->
+  equipment). commit still re-resolves (defense in depth, rule 4): a hand-edited
+  value that no longer matches 422s.
+- PreviewResult carries the resolved entities; presenters.preview_result adds a
+  per-identity resolution marker to the response ({plot:{found,crop,sigpac},
+  product:{found}, equipment:{found}}). The form (ReviewForm) shows ✓ + the plot's
+  crop/SIGPAC on a match, or a ⚠️ fix-it hint on a miss — but only while the field
+  is UNTOUCHED, since the marker reflects the preview snapshot; once edited, commit
+  is the authority. EXTRACTED presenters._sigpac (was inline in intervention_detail).
 
 M8.2 — soft-delete + correction (rule 1 + rule 7):
 - ADD Repository.soft_delete_intervention(id, advisor_id): UPDATE deleted_at=now()
@@ -71,10 +92,26 @@ M8.2 — soft-delete + correction (rule 1 + rule 7):
 - KNOWN gap: soft-deleting an EXECUTED record already counted by a signed campaign
   validation is allowed and not reconciled — acceptable for MVP, revisit if it bites.
 
-M8.3 — PWA: record → preview → editable review form (prefilled with the extracted
-fields + transcription) → confirm (commit). Detail screen gains "corregir" (edit
-→ supersede) and "eliminar" (soft-delete), on the detail like the execution/assess
-actions.
+M8.3 — PWA create flow: DONE, verified on a real phone. Recorder is now
+two-phase — record → "Transcribir y revisar" (previewRecord, no save) → ReviewForm
+→ "Confirmar y guardar" (commitRecord). api.js: createRecord SPLIT into
+previewRecord (multipart) + commitRecord (JSON, Content-Type set by hand since it
+is not FormData). transaction_id/device_timestamp still captured at record-stop and
+reused on commit retry (rules 2/3); preview is side-effect free so retrying it is
+free.
+- ReviewForm prefills from the extracted fields; the record_type is an editable
+  segmented control (the advisor can fix a mis-classification) and the fields shown
+  switch on it (observation vs product/dose/pest/equipment + area/justification).
+  buildPayload spreads the ORIGINAL fields first, so values the LLM extracted but
+  the form doesn't render (operator_*, previous_alternatives, planned_date) still
+  reach commit — no data loss. Numbers coerced, blank optionals -> null.
+- Client stays thin: NO field validation beyond what the form types give; a
+  missing/illegal value is the backend's 422, surfaced verbatim in the form so the
+  advisor fixes it and resubmits (matches the "commit 422s, advisor re-edits"
+  decision above). The transcription is shown read-only as "lo que dictaste".
+- The detail-screen "corregir" (supersede) + "eliminar" (soft-delete) actions are
+  NOT here — they depend on the M8.2 backend (soft_delete + CorrectionService), so
+  they land with M8.2.
 
 Tests: preview returns fields without persisting · commit re-validates edited
 fields (illegal dose still 422) · soft-delete then read → 404 · supersede deletes
