@@ -13,7 +13,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
-from fastapi import Depends, FastAPI, File, Form, Query, Request, UploadFile
+from fastapi import Body, Depends, FastAPI, File, Form, Query, Request, UploadFile
 from fastapi.responses import JSONResponse
 
 from app.adapters.inbound import presenters
@@ -32,6 +32,7 @@ from app.core.domain.models import (
     Validation,
     ValidationType,
 )
+from app.core.domain.schemas import ExtractedFields
 from app.core.domain.states import LifecycleState
 
 logger = logging.getLogger(__name__)
@@ -158,30 +159,58 @@ async def bootstrap(
     return JSONResponse(content={"advisor_id": str(advisor.id)})
 
 
-@app.post("/api/records")
-async def create_record(
+@app.post("/api/records/preview")
+async def preview_record(
     audio: UploadFile = File(...),
-    transaction_id: UUID = Form(...),
-    device_timestamp: datetime = Form(...),
     advisor_id: UUID = Depends(current_advisor_id),
 ) -> JSONResponse:
-    """FLUJO A for the PWA: an audio note -> persisted intervention (spec §7).
+    """FLUJO A phase 1 for the PWA (M8): audio note -> extracted fields for the
+    advisor to REVIEW, WITHOUT persisting (hard rule 4 — nothing from the LLM
+    reaches the legal record unseen).
 
-    This is SYNCHRONOUS: the advisor's UI waits for the outcome (a saved record
-    to list, or a 422 dose/area error to show), so we
-    process inline and let the registered exception handlers translate any
-    failure into the {"error", "mensaje"} shape.
+    Returns the raw transcription ("lo que dictaste") and the extracted fields the
+    PWA prefills into an editable form; the advisor corrects them and POSTs to
+    /api/records (commit). Side-effect free, so no transaction_id/device_timestamp
+    here — those are sent at commit. A provider failure surfaces as a 503."""
+    preview = await container.pipeline.preview(
+        audio=await audio.read(), advisor_id=advisor_id
+    )
+    return JSONResponse(
+        content={
+            "transcription": preview.transcription,
+            "fields": preview.fields.model_dump(),
+        }
+    )
 
-    ``advisor_id`` comes from the verified Supabase JWT (``current_advisor_id``),
-    not a request field — the record is attributed to whoever is logged in. The
-    client still sends its own ``transaction_id`` (crypto.randomUUID) and the
-    device timestamp (hard rules 2 and 3).
+
+@app.post("/api/records")
+async def create_record(
+    fields: ExtractedFields = Body(...),
+    transaction_id: UUID = Body(...),
+    device_timestamp: datetime = Body(...),
+    transcription: str = Body(...),
+    advisor_id: UUID = Depends(current_advisor_id),
+) -> JSONResponse:
+    """FLUJO A phase 2 for the PWA (M8): persist the advisor-REVIEWED fields ->
+    intervention (spec §7). The audio was already transcribed + extracted by
+    /api/records/preview; here the (possibly hand-edited) fields come back as JSON.
+
+    This is SYNCHRONOUS: the advisor's UI waits for the outcome (a saved record to
+    list, or a 422 dose/area error to show). ``fields`` is untrusted client input,
+    so commit re-passes ExtractedFields + the legal validation (hard rules 4/5).
+
+    JSON body (``Body(...)`` args, not ``Form`` like the other endpoints) because
+    ``fields`` is a nested object that form-encoding can't carry — see decisions
+    2026-07-09. ``advisor_id`` comes from the verified Supabase JWT, not the body.
+    The client sends its own ``transaction_id`` (crypto.randomUUID, rule 3), the
+    device timestamp (rule 2) and the original ``transcription`` (audit trail).
     """
-    intervention = await container.pipeline.register(
-        audio=await audio.read(),
+    intervention = await container.pipeline.commit(
+        fields=fields,
         advisor_id=advisor_id,
         transaction_id=transaction_id,
         device_timestamp=device_timestamp,
+        transcription=transcription,
     )
     return JSONResponse(content=await _record_response(intervention))
 

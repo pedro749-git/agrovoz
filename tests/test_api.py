@@ -41,15 +41,20 @@ def _intervention(state=LifecycleState.PRESCRIBED):
 
 
 class FakePipeline:
-    """Stands in for container.pipeline: returns a record or raises."""
+    """Stands in for container.pipeline: returns a record/preview or raises."""
 
-    def __init__(self, result=None, error=None):
-        self._result, self._error = result, error
+    def __init__(self, result=None, error=None, preview=None):
+        self._result, self._error, self._preview = result, error, preview
 
-    async def register(self, **kwargs):
+    async def commit(self, **kwargs):
         if self._error:
             raise self._error
         return self._result
+
+    async def preview(self, **kwargs):
+        if self._error:
+            raise self._error
+        return self._preview
 
 
 @pytest.fixture
@@ -62,11 +67,13 @@ def client():
 
 
 def _post(client):
+    """POST the commit endpoint: reviewed fields as JSON (M8), not audio."""
     return client.post(
         "/api/records",
-        files={"audio": ("a.ogg", b"x", "audio/ogg")},
-        data={"transaction_id": str(uuid4()),
-              "device_timestamp": "2026-06-19T10:00:00Z"})
+        json={"fields": {"record_type": "OBSERVATION", "plot_alias": "Finca de Pepe"},
+              "transaction_id": str(uuid4()),
+              "device_timestamp": "2026-06-19T10:00:00Z",
+              "transcription": "texto dictado"})
 
 
 def test_post_record_200(client, monkeypatch):
@@ -76,6 +83,26 @@ def test_post_record_200(client, monkeypatch):
     body = r.json()
     assert body["lifecycle_state"] == "PRESCRIBED"
     assert body["has_pdf"] is False and body["pdf_url"] is None
+
+
+def test_preview_record_200(client, monkeypatch):
+    from app.core.domain.schemas import ExtractedFields
+    from app.core.services.registration_pipeline import PreviewResult
+
+    preview = PreviewResult(
+        transcription="Finca de Pepe, abamectina, araña roja, tractor",
+        fields=ExtractedFields(
+            record_type="PRESCRIPTION", plot_alias="Finca de Pepe",
+            product_name="Abamectina", dose=1.5, dose_unit="L/ha",
+            target_pest="araña roja", equipment_alias="tractor"))
+    monkeypatch.setattr(container, "pipeline", FakePipeline(preview=preview))
+    r = client.post("/api/records/preview",
+                    files={"audio": ("a.ogg", b"x", "audio/ogg")})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["transcription"].startswith("Finca de Pepe")
+    assert body["fields"]["product_name"] == "Abamectina"
+    assert body["fields"]["dose"] == 1.5
 
 
 def test_domain_error_maps_to_422(client, monkeypatch):

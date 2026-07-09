@@ -1,8 +1,13 @@
-"""FLUJO A — registration pipeline (M2).
+"""FLUJO A — registration pipeline (M2; split into preview/commit in M8).
 
 Audio -> transcription -> extracted JSON -> legal validation -> Supabase row.
 Depends only on ports (Transcriber, Extractor, Repository), so it is transport
-agnostic: the PWA REST API calls this same method.
+agnostic: the PWA REST API calls these same methods.
+
+Split into two phases so the advisor REVIEWS the extracted fields before they
+reach the legal record (hard rule 4 — LLM output is untrusted):
+- ``preview``: transcribe + extract, NO DB write. Returns the fields to edit.
+- ``commit``: resolve + VALIDATE (on the edited fields) + build + PDF + persist.
 
 The pipeline RAISES typed domain errors and RETURNS the persisted intervention;
 the inbound adapter decides how to surface that (an HTTP 422 JSON for the PWA).
@@ -10,6 +15,7 @@ the inbound adapter decides how to surface that (an HTTP 422 JSON for the PWA).
 
 import asyncio
 import logging
+from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
@@ -43,6 +49,16 @@ _RECORD_TYPE_TO_STATE = {
 }
 
 
+@dataclass(frozen=True)
+class PreviewResult:
+    """What ``preview`` hands back for the advisor to review before committing:
+    the raw transcription (shown as "lo que dictaste") and the extracted fields
+    (prefilled into the editable form). Nothing is persisted yet."""
+
+    transcription: str
+    fields: ExtractedFields
+
+
 class RegistrationPipeline:
     def __init__(
         self,
@@ -58,46 +74,74 @@ class RegistrationPipeline:
         self._pdf = pdf_generator
         self._storage = storage
 
-    async def register(
+    async def preview(
+        self, *, audio: bytes, advisor_id: UUID
+    ) -> PreviewResult:
+        """Phase 1: transcribe + extract, NO DB write. Returns the fields for the
+        advisor to review/correct before ``commit`` persists them (hard rule 4)."""
+        with timed("FLUJO A: preview (total)"):
+            return await self._preview(audio=audio, advisor_id=advisor_id)
+
+    async def _preview(
+        self, *, audio: bytes, advisor_id: UUID
+    ) -> PreviewResult:
+        # The advisor must exist and be ACTIVE (FLUJO A step 2) — fail fast before
+        # paying for transcription.
+        advisor = await self._repo.get_advisor(advisor_id)
+        if advisor is None or advisor.account_status != "ACTIVE":
+            raise DomainError("La cuenta del asesor no está activa.")
+
+        # Transcribe + extract (LLM output validated by ExtractedFields).
+        # The two Qwen round-trips are the usual latency hot spot -> timed.
+        with timed("FLUJO A: transcribe (Qwen audio)"):
+            transcription = await self._transcriber.transcribe(audio)
+        with timed("FLUJO A: extract (Qwen instruct)"):
+            fields = await self._extractor.extract(transcription)
+
+        return PreviewResult(transcription=transcription, fields=fields)
+
+    async def commit(
         self,
         *,
-        audio: bytes,
+        fields: ExtractedFields,
         advisor_id: UUID,
         transaction_id: UUID,
         device_timestamp: datetime,
+        transcription: str,
     ) -> Intervention:
-        with timed("FLUJO A: register (total)"):
-            return await self._register(
-                audio=audio,
+        """Phase 2: resolve + VALIDATE (on the advisor-edited fields) + build +
+        PDF + persist. ``fields`` is untrusted client input (edited by hand after
+        the preview), so it still passes ExtractedFields and the legal validation
+        (hard rules 4/5). ``transcription`` is the ORIGINAL audio transcription,
+        stored as the audit trail regardless of what the advisor edited."""
+        with timed("FLUJO A: commit (total)"):
+            return await self._commit(
+                fields=fields,
                 advisor_id=advisor_id,
                 transaction_id=transaction_id,
                 device_timestamp=device_timestamp,
+                transcription=transcription,
             )
 
-    async def _register(
+    async def _commit(
         self,
         *,
-        audio: bytes,
+        fields: ExtractedFields,
         advisor_id: UUID,
         transaction_id: UUID,
         device_timestamp: datetime,
+        transcription: str,
     ) -> Intervention:
         # 1. Idempotency (hard rule 3): a retry returns the existing row.
         existing = await self._repo.get_intervention_by_transaction_id(transaction_id)
         if existing is not None:
             return existing
 
-        # 2. The advisor must exist and be ACTIVE (FLUJO A step 2).
+        # 2. The advisor must exist and be ACTIVE. Re-checked here (not only in
+        #    preview): commit is a separate request and is also needed for the PDF.
         advisor = await self._repo.get_advisor(advisor_id)
         if advisor is None or advisor.account_status != "ACTIVE":
             raise DomainError("La cuenta del asesor no está activa.")
-
-        # 3. Transcribe + extract (LLM output validated by ExtractedFields).
-        #    The two Qwen round-trips are the usual latency hot spot -> timed.
-        with timed("FLUJO A: transcribe (Qwen audio)"):
-            transcription = await self._transcriber.transcribe(audio)
-        with timed("FLUJO A: extract (Qwen instruct)"):
-            fields = await self._extractor.extract(transcription)
 
         # 4. Resolve the plot (always mandatory).
         plot = await self._repo.get_plot_by_alias(advisor_id, fields.plot_alias)

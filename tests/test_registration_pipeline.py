@@ -95,12 +95,18 @@ class FakeStorage:
         return f"https://fake/{key}"
 
 
-async def _run(fields, repo=None):
-    repo = repo or FakeRepo()
-    pipeline = RegistrationPipeline(
+def _pipeline(fields, repo):
+    return RegistrationPipeline(
         FakeTranscriber(), FakeExtractor(fields), repo, FakePdf(), FakeStorage())
-    iv = await pipeline.register(
-        audio=b"x", advisor_id=ADV, transaction_id=uuid4(), device_timestamp=NOW)
+
+
+async def _run(fields, repo=None):
+    """commit() the given fields (as if the advisor reviewed them post-preview).
+    The transcription is the audit trail, stored regardless of any edit."""
+    repo = repo or FakeRepo()
+    iv = await _pipeline(fields, repo).commit(
+        fields=fields, advisor_id=ADV, transaction_id=uuid4(),
+        device_timestamp=NOW, transcription="texto dictado")
     return iv, repo
 
 
@@ -159,3 +165,19 @@ def test_idempotent_retry_returns_existing_row():
     iv, repo = asyncio.run(_run(
         ExtractedFields(record_type="OBSERVATION", plot_alias="Finca de Pepe"), repo))
     assert iv is repo.existing and repo.saved is None  # idempotent: no insert
+
+
+def test_preview_extracts_without_persisting():
+    fields = ExtractedFields(record_type="OBSERVATION", plot_alias="Finca de Pepe")
+    repo = FakeRepo()
+    preview = asyncio.run(_pipeline(fields, repo).preview(audio=b"x", advisor_id=ADV))
+    assert preview.transcription == "texto dictado"
+    assert preview.fields is fields
+    assert repo.saved is None  # phase 1 never touches the DB
+
+
+def test_commit_stores_original_transcription_as_audit_trail():
+    # The advisor may edit the fields, but raw_transcription keeps what was HEARD.
+    iv, _ = asyncio.run(_run(ExtractedFields(
+        record_type="OBSERVATION", plot_alias="Finca de Pepe", observation="3 capturas")))
+    assert iv.raw_transcription == "texto dictado"

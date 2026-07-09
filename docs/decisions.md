@@ -3,6 +3,83 @@
 One line per decision (taken AND discarded): what · why · date.
 This file becomes the thesis' design chapter.
 
+## 2026-07-09 — M8 START (PLAN) — intervention correction flow
+
+- SCOPE: M1–M7 = the planned MVP (all done). The hackathon deadline was extended
+  to 2026-07-20, so post-M7 work CONTINUES the same milestone numbering (M8+)
+  rather than an unnumbered "improvements" backlog — the milestone log is the
+  thesis' design chapter and the "each milestone works end-to-end before the
+  next" rule is exactly what stops three half-features landing by the 20th. M8+
+  is explicitly labelled the post-MVP hardening phase.
+- WHY M8 FIRST (over the MAPA catalog / pagination / search): it closes hard
+  rules 1/4/7 that are today HALF-implemented — LLM output is persisted with NO
+  human review step (rule 4 trust boundary), interventions cannot be soft-deleted
+  (rule 1), and there is no correction path (rule 7). Highest demo-safety, lowest
+  risk. The MAPA catalog (makes the legal dose/PHI validation REAL instead of a
+  seeded mock) is the M9 candidate if runway allows.
+
+M8.1 — review-before-persist (split FLUJO A into preview + commit): DONE (backend)
+- SPLIT RegistrationPipeline into preview(audio, advisor_id) -> PreviewResult
+  (transcribe + extract, NO DB write) and commit(fields, …) (resolve + VALIDATE +
+  build + PDF + save). NO new service — same FLUJO A, same ports; a separate
+  service would duplicate the resolution logic. PreviewResult is a frozen
+  dataclass IN the pipeline (a core method's return, mirror of WeatherData), not
+  an HTTP shape.
+- REMOVED the old register() one-shot: after the split nothing in production calls
+  it (the PWA uses the two phases; Telegram is gone, removed d403e8e), so keeping
+  it only for the tests would be dead code + false coverage. The pipeline tests now
+  call commit()/preview() directly — the seams production actually uses.
+- VALIDATE in commit (rule 4/5) on the fields the advisor EDITED — the review can
+  introduce an illegal dose, so commit re-validates; preview alone never persists.
+  Advisor-active check runs in BOTH (fail fast in preview; commit re-checks as a
+  separate request + needs the advisor for the PDF).
+- raw_transcription stores the ORIGINAL audio transcription, not the edited fields
+  → the record keeps the "what was heard vs what the advisor confirmed" audit
+  trail. transaction_id (rule 3) is client-generated at commit; preview is
+  side-effect-free so it needs none.
+- ENDPOINTS: POST /api/records/preview (multipart audio → {transcription, fields});
+  POST /api/records BECOMES the commit. NO Pydantic wrapper request model (first
+  instinct, DISCARDED): every existing write endpoint declares its fields directly
+  as args — with Form(...) for flat payloads. commit carries ExtractedFields (a
+  NESTED object form-encoding can't represent), so it uses Body(...) args directly
+  instead (fields: ExtractedFields = Body(...), + transaction_id/device_timestamp/
+  transcription). Same "fields as args" convention, JSON instead of Form because
+  there's no file — preview owns the multipart upload. ExtractedFields reused as
+  the body is not a layering leak: the hand-edited fields are still untrusted input
+  and ExtractedFields is exactly their rule-4 gate. So the M5 "introduce request
+  models in a dedicated module" note does NOT trigger — Body(...) keeps zero new
+  classes/modules.
+- DISCARDED a validation dry-run inside preview (resolve + warn in red before
+  confirming): keep the first slice lean — commit 422s with the clear Spanish
+  message and the advisor re-edits. Add the dry-run later if the loop annoys.
+
+M8.2 — soft-delete + correction (rule 1 + rule 7):
+- ADD Repository.soft_delete_intervention(id, advisor_id): UPDATE deleted_at=now()
+  WHERE id AND advisor_id AND deleted_at IS NULL (scope = authorization). Endpoint
+  DELETE /api/interventions/{id}: load live → 404 if foreign/unknown/already-gone,
+  else soft-delete.
+- ADD a small CorrectionService.supersede(id, advisor_id, new_fields,
+  transaction_id): commit the NEW record first (idempotent via the client
+  transaction_id) THEN soft-delete the old → a retry returns the existing new row
+  and re-deleting the old is a no-op. Carries the old record's device_timestamp
+  (rule 2: the treatment date does not change) + raw_transcription (audit chain).
+  REUSES pipeline.commit; the service owns zero creation logic, only the
+  soft-delete+commit orchestration (encodes rule 7). Endpoint POST
+  /api/interventions/{id}/correction (JSON: edited fields + transaction_id).
+- IN-PLACE update_intervention stays for FORWARD transitions only (execution,
+  assessment); a correction never mutates a legal row in place.
+- KNOWN gap: soft-deleting an EXECUTED record already counted by a signed campaign
+  validation is allowed and not reconciled — acceptable for MVP, revisit if it bites.
+
+M8.3 — PWA: record → preview → editable review form (prefilled with the extracted
+fields + transcription) → confirm (commit). Detail screen gains "corregir" (edit
+→ supersede) and "eliminar" (soft-delete), on the detail like the execution/assess
+actions.
+
+Tests: preview returns fields without persisting · commit re-validates edited
+fields (illegal dose still 422) · soft-delete then read → 404 · supersede deletes
+old + creates new + is idempotent on retry.
+
 ## 2026-07-04 — M7.3 PWA: validation screen (grouped by holding → campaign)
 
 - ADDED Validation.jsx (route /validaciones, linked from Home): the advisor's
