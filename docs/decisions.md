@@ -1156,3 +1156,11 @@ old + creates new + is idempotent on retry.
   "the PWA's CSP" was CSP-readiness / a deploy-layer policy, not in the code) · if
   a deploy-layer CSP exists, allow challenges.cloudflare.com in script-src +
   frame-src · 2026-07-08
+- npm supply-chain hardening in pwa/.npmrc · audit vs the 2026 npm attacks found
+  nothing compromised (no flagged package/version in the 505-package lockfile,
+  zero deps declaring install scripts, no attack artifacts, npm audit clean, all
+  lockfile URLs point to registry.npmjs.org) · ignore-scripts=true is safe here
+  precisely because no dep in the tree runs lifecycle scripts; min-release-age=
+  7 days rejects freshly hijacked releases but is silently ignored by npm 10.9.8
+  (takes effect on a newer npm) · use npm ci (not npm install) in CI/clean
+  installs so the lockfile is enforced · 2026-07-13
