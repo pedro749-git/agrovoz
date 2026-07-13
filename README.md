@@ -47,13 +47,17 @@ begins.
 M1–M7 were the planned MVP. Since the hackathon deadline moved to 2026-07-20,
 post-M7 work continues the same numbering as a **post-MVP hardening phase (M8+)**.
 
-- [ ] **M8** (in progress) — Review-before-persist and correction of interventions.
+- [x] **M8** — Review-before-persist and correction of interventions.
       - [x] **M8.1** — FLUJO A split into `preview` (transcribe + extract, no save)
             and `commit` (persist the reviewed fields), so nothing from the LLM
             reaches the legal record unseen (hard rule 4). `preview` also resolves
             the dictated names against the catalog and canonicalizes them.
-      - [ ] **M8.2** — Soft-delete of interventions + correction (supersede = new
-            record + soft-delete of the old one, hard rules 1/7).
+      - [x] **M8.2** — **Verified on a real phone.** Soft-delete of interventions
+            + correction by supersede (a new record replaces the old one, which is
+            soft-deleted and linked via `supersedes_intervention_id`, hard rules
+            1/7). The replacement inherits the original's dictation timestamp,
+            transcription and `created_at`; the PWA offers "Corregir" (the review
+            form prefilled from the record) and "Eliminar" on the detail screen.
       - [x] **M8.3** — **Verified on a real phone.** Two-phase PWA record flow:
             record → review the extracted fields (prefilled with catalog-resolved
             names, a ✓/⚠️ marker per identity field, the plot's crop/SIGPAC) →

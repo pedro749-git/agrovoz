@@ -13,6 +13,7 @@ from app.adapters.outbound.supabase_repo import SupabaseRepository
 from app.config.settings import settings
 from app.core.services.assessment_service import AssessmentService
 from app.core.services.campaign_validation_service import CampaignValidationService
+from app.core.services.correction_service import CorrectionService
 from app.core.services.execution_service import ExecutionService
 from app.core.services.onboarding_service import OnboardingService
 from app.core.services.registration_pipeline import RegistrationPipeline
@@ -31,6 +32,9 @@ execution_service = ExecutionService(
     repository, weather, settings.iteaf_validity_years
 )
 assessment_service = AssessmentService(repository)
+# M8.2: correction (supersede) + soft-delete. Reuses the pipeline so a
+# correction re-runs the same legal validation and PDF as a fresh FLUJO A.
+correction_service = CorrectionService(repository, pipeline)
 campaign_validation_service = CampaignValidationService(
     repository, pdf_generator, storage
 )

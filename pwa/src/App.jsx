@@ -6,6 +6,7 @@ import Login from './Login.jsx'
 import Settings from './Settings.jsx'
 import Home from './Home.jsx'
 import Detail from './Detail.jsx'
+import Correct from './Correct.jsx'
 import History from './History.jsx'
 import Validation from './Validation.jsx'
 
@@ -68,6 +69,7 @@ function App() {
       <Route path="/" element={<Home />} />
       <Route path="/historial" element={<History />} />
       <Route path="/registro/:id" element={<Detail />} />
+      <Route path="/registro/:id/corregir" element={<Correct />} />
       <Route path="/validaciones" element={<Validation />} />
       <Route path="/ajustes" element={<SettingsRoute session={session} />} />
       {/* Unknown path -> home (e.g. a stale deep link). */}

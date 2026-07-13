@@ -16,6 +16,7 @@ from app.core.domain.models import (
     Holding,
     Intervention,
     Plot,
+    Product,
     Validation,
 )
 from app.core.services.registration_pipeline import PreviewResult
@@ -101,10 +102,14 @@ def intervention_detail(
     plot: Plot | None,
     holding: Holding | None,
     equipment: Equipment | None,
+    product: Product | None,
 ) -> dict:
     """Full single-record projection for the detail screen: the list fields PLUS
     the prescription/execution detail, the raw transcription ("lo que dictaste"),
-    and the plot/holding/equipment context. Nested context blocks are None when
+    and the plot/holding/equipment/product context. The record stores only the
+    MAPA number; the product block adds the trade name the advisor recognises —
+    shown on the detail and prefilled by the correction form (M8.2), whose
+    commit resolves the product BY name. Nested context blocks are None when
     the related row is missing (e.g. an OBSERVATION has no equipment)."""
     data = record_fields(intervention)
     data.update(
@@ -161,6 +166,14 @@ def intervention_detail(
                     "iteaf_inspection_date": _iso(equipment.iteaf_inspection_date),
                 }
                 if equipment
+                else None
+            ),
+            "product": (
+                {
+                    "trade_name": product.trade_name,
+                    "registration_number": product.registration_number,
+                }
+                if product
                 else None
             ),
         }

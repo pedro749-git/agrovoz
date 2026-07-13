@@ -9,7 +9,7 @@ Every read filters ``deleted_at IS NULL`` (hard rule 1: soft-delete only).
 """
 
 import dataclasses
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from enum import Enum
 from typing import get_args, get_type_hints
 from uuid import UUID
@@ -122,17 +122,26 @@ def _serialize(obj) -> dict:
     documented escape hatch for computed/in-memory-only fields.
     ``tests/test_serialize_columns.py`` asserts this payload matches the
     migration's columns exactly, so model<->schema drift fails loudly there.
+
+    Exception: an explicitly SET ``created_at`` is sent (overriding the DB
+    default). A correction (M8.2) inherits its predecessor's created_at so the
+    replacement keeps the original's place everywhere created_at drives
+    (today/history lists, campaign validation periods); the moment of the
+    correction itself survives in the old row's ``deleted_at``.
     """
     persisted = {
         f.name
         for f in dataclasses.fields(obj)
         if f.name not in _DB_GENERATED and f.metadata.get("persist", True)
     }
-    return {
+    payload = {
         k: _to_json(v)
         for k, v in dataclasses.asdict(obj).items()
         if k in persisted
     }
+    if getattr(obj, "created_at", None) is not None:
+        payload["created_at"] = _to_json(obj.created_at)
+    return payload
 
 
 class SupabaseRepository(Repository):
@@ -344,6 +353,25 @@ class SupabaseRepository(Repository):
                 f"update_intervention matched no row (id={intervention.id})"
             )
         return _deserialize(Intervention, res.data[0])
+
+    async def soft_delete_intervention(
+        self, intervention_id: UUID, advisor_id: UUID
+    ) -> Intervention | None:
+        # A soft-delete IS an update: set deleted_at, never DELETE (hard rule 1).
+        # The deleted_at IS NULL guard makes it idempotent (an already-deleted
+        # row matches nothing -> None) and the advisor_id filter is the
+        # authorization, like every intervention read. Server clock is fine
+        # here: deleted_at is audit metadata, not a field-event date (rule 2
+        # only binds treatment_date).
+        client = await get_client()
+        res = await _run(
+            client.table("interventions")
+            .update({"deleted_at": datetime.now(timezone.utc).isoformat()})
+            .eq("id", str(intervention_id))
+            .eq("advisor_id", str(advisor_id))
+            .is_("deleted_at", "null")
+        )
+        return _deserialize(Intervention, res.data[0]) if res.data else None
 
     async def list_interventions_in_period(
         self, holding_id: UUID, *, start: date, end: date

@@ -123,6 +123,17 @@ class Repository(ABC):
         the updated row. FLUJO B (M5): PRESCRIBED -> EXECUTED."""
 
     @abstractmethod
+    async def soft_delete_intervention(
+        self, intervention_id: UUID, advisor_id: UUID
+    ) -> Intervention | None:
+        """Soft-delete one intervention (M8.2): set ``deleted_at``, never DELETE
+        (hard rule 1 — the row stays for the 3-year retention; every read already
+        filters it out). Scoped to the advisor like ``get_intervention`` — the
+        scope IS the authorization check. Returns the deleted row, or None when
+        it does not exist, is not yours, or was already deleted (the caller maps
+        that to an indistinguishable 404)."""
+
+    @abstractmethod
     async def list_interventions_in_period(
         self, holding_id: UUID, *, start: date, end: date
     ) -> list[Intervention]:

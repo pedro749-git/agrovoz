@@ -14,7 +14,7 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from fastapi import Body, Depends, FastAPI, File, Form, Query, Request, UploadFile
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 
 from app.adapters.inbound import presenters
 from app.adapters.inbound.auth import (
@@ -261,9 +261,12 @@ async def get_intervention_detail(
     Scoped to the authenticated advisor, so an unknown OR foreign id is an
     indistinguishable 404 (you cannot probe what is not yours). Richer than the
     list projection: it adds the prescription/execution detail and the raw
-    transcription, plus the plot/holding/equipment context the detail renders.
-    Three extra reads (plot, holding, equipment) are fine for a single record —
-    this is exactly why the list stays lean and does NOT do them per row.
+    transcription, plus the plot/holding/equipment/product context the detail
+    renders (the record stores only the MAPA number; the product block carries
+    the trade name the advisor recognises, which the M8.2 correction form also
+    needs — commit resolves the product BY name). Four extra reads are fine for
+    a single record — this is exactly why the list stays lean and does NOT do
+    them per row.
     """
     intervention = await container.repository.get_intervention(
         intervention_id, advisor_id
@@ -278,8 +281,17 @@ async def get_intervention_detail(
         if intervention.equipment_id is not None
         else None
     )
+    product = (
+        await container.repository.get_product_by_registration_number(
+            intervention.product_registration_number
+        )
+        if intervention.product_registration_number is not None
+        else None
+    )
     return JSONResponse(
-        content=presenters.intervention_detail(intervention, plot, holding, equipment)
+        content=presenters.intervention_detail(
+            intervention, plot, holding, equipment, product
+        )
     )
 
 
@@ -315,6 +327,55 @@ async def get_intervention_pdf(
 
     url = await container.storage.presigned_url(intervention.prescription_pdf_key)
     return JSONResponse(content={"pdf_url": url})
+
+
+@app.delete("/api/interventions/{intervention_id}")
+async def delete_intervention(
+    intervention_id: UUID,
+    advisor_id: UUID = Depends(current_advisor_id),
+) -> Response:
+    """Soft-delete one record (M8.2, hard rule 1): sets ``deleted_at``, never
+    removes the row — it stays in the DB for the 3-year retention, invisible to
+    every read. Allowed in any lifecycle state (annulling a mistaken record is
+    legitimate; the data is preserved either way).
+
+    Scoped to the authenticated advisor, so an unknown, foreign or
+    already-deleted id is the same indistinguishable 404. Success is an empty
+    204 — there is nothing to return about a record that is now invisible."""
+    await container.correction_service.delete(
+        intervention_id=intervention_id, advisor_id=advisor_id
+    )
+    return Response(status_code=204)
+
+
+@app.post("/api/interventions/{intervention_id}/correction")
+async def correct_intervention(
+    intervention_id: UUID,
+    fields: ExtractedFields = Body(...),
+    transaction_id: UUID = Body(...),
+    advisor_id: UUID = Depends(current_advisor_id),
+) -> JSONResponse:
+    """Correct a record by SUPERSEDING it (M8.2, hard rule 7): a new intervention
+    is committed with the edited fields — re-running the full legal validation
+    and PDF, like a fresh FLUJO A — pointing at the old record, which is then
+    soft-deleted. Never an in-place edit of a legal record.
+
+    JSON body like POST /api/records, but leaner on purpose: no
+    ``device_timestamp`` (the replacement keeps the ORIGINAL dictation's
+    timestamp — a correction fixes what the record says, not when the field
+    event happened, rule 2) and no ``transcription`` (the audit trail is
+    inherited from the old record, as is its ``created_at``, so the correction
+    keeps its place in the lists and campaign periods). ``transaction_id`` is a FRESH
+    crypto.randomUUID for the new row; reusing it on a retry is what makes the
+    two-step supersede self-healing (rule 3). Scoped to the authenticated
+    advisor, so a foreign id is an indistinguishable 404."""
+    intervention = await container.correction_service.supersede(
+        intervention_id=intervention_id,
+        fields=fields,
+        advisor_id=advisor_id,
+        transaction_id=transaction_id,
+    )
+    return JSONResponse(content=await _record_response(intervention))
 
 
 @app.patch("/api/interventions/{intervention_id}/execution")

@@ -195,6 +195,9 @@ class Intervention:
     effectiveness_notes: str | None = None  # voice-dictated reason (why)
 
     # ── TRACEABILITY block (internal) ──
+    # Correction chain (M8.2, hard rules 1/7): a correction inserts a NEW row
+    # pointing at the soft-deleted record it replaces — never an in-place edit.
+    supersedes_intervention_id: UUID | None = None
     audio_storage_key: str | None = None
     execution_audio_key: str | None = None
     raw_transcription: str | None = None

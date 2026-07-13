@@ -3,6 +3,59 @@
 One line per decision (taken AND discarded): what · why · date.
 This file becomes the thesis' design chapter.
 
+## 2026-07-13 — M8.2 — soft-delete + correction by supersede (hard rules 1/7)
+
+- CORRECTION = SUPERSEDE, never an in-place edit: a new intervention is committed
+  with the corrected fields and the old row is soft-deleted. Editing the row
+  (UPDATE) was DISCARDED — it destroys what the record said when its PDF was
+  generated, breaking rule 1; supersede keeps both versions in the DB while the
+  app only sees the live one (every read already filters deleted_at IS NULL).
+- NEW COLUMN interventions.supersedes_intervention_id (UUID, self-FK, NULL unless
+  the row is a correction). Debated against the "no speculative DB fields" rule
+  and KEPT: without the link a corrected record and its soft-deleted predecessor
+  are unrelated rows, so an audit cannot distinguish a correction from a plain
+  deletion — the column is what makes rule 7 verifiable IN the data, i.e. a
+  pipeline need, not speculation. Corrections form an auditable chain.
+- CorrectionService.supersede REUSES pipeline.commit wholesale (no new insert
+  path): the corrected fields are untrusted client input like any commit body, so
+  they re-run ExtractedFields + catalog resolution + legal validation + the
+  prescription PDF for free. Order is commit FIRST, soft-delete AFTER: a 422 on
+  the corrected fields leaves the original untouched; a soft-delete failure after
+  a successful commit self-heals on retry (commit's transaction_id idempotency
+  returns the saved replacement, then only the soft-delete re-runs).
+- The replacement INHERITS from the old record its raw_transcription (the audit
+  trail documents what was DICTATED; a correction edits fields, not audio) and its
+  ORIGINAL device timestamp (prescription_date ?? treatment_date ?? created_at) —
+  sending a fresh device_timestamp was DISCARDED because a Thursday correction of
+  a Monday prescription must not move the field event to Thursday (rule 2). So
+  POST /api/interventions/{id}/correction carries only fields + transaction_id.
+- The replacement ALSO inherits the old row's created_at (user decision, same
+  day): with a DB-stamped created_at the correction jumped to "today" in the
+  Home/history lists AND moved into a different campaign validation period (M7
+  counts interventions by created_at window) — a correction must not relocate
+  the intervention. Alternatives DISCARDED: grouping lists by prescription_date
+  ?? created_at (does not cover OBSERVATIONs, needs an ugly PostgREST or-filter)
+  and keeping the status quo (the campaign-period drift kills it). _serialize
+  now sends created_at ONLY when explicitly set (fresh records keep the DB
+  default); the correction moment is not lost — it lives in the old row's
+  deleted_at.
+- Lost-response retry on supersede: the first attempt soft-deleted the old row, so
+  the retry's get_intervention(old_id) is None and would 404 a correction that
+  SUCCEEDED; before raising, look up the (client-reused) transaction_id and return
+  the replacement if it exists — same idempotency promise as commit (rule 3).
+- DELETE /api/interventions/{id} = soft-delete in ANY lifecycle state (annulling a
+  mistaken record is legitimate; the row persists for the 3-year retention either
+  way), scoped to the advisor → unknown/foreign/already-deleted ids are the same
+  404. Returns 204 (nothing to say about a now-invisible record).
+- PWA offers "Corregir" only on OBSERVATION/PRESCRIBED for now: correcting an
+  EXECUTED record through FLUJO A commit would drop its captured weather + real
+  applied data (commit never calls Open-Meteo) — that slice waits until needed.
+  "Eliminar" (native confirm()) is offered in every state. The correction screen
+  REUSES ReviewForm prefilled from the detail; the detail endpoint/presenter now
+  also joins the product row (trade_name) because the record stores only the MAPA
+  number while commit resolves the product BY name — shown on the detail too
+  ("Producto: Abamectina" above the MAPA number).
+
 ## 2026-07-09 — M8 START (PLAN) — intervention correction flow
 
 - SCOPE: M1–M7 = the planned MVP (all done). The hackathon deadline was extended

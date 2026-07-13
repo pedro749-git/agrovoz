@@ -185,6 +185,36 @@ export async function assessEffectiveness(
   return unwrap(response)
 }
 
+// DELETE /api/interventions/:id — soft-deletes a record (M8.2): the backend
+// keeps the row (legal retention) but it stops being visible everywhere. A
+// 204 has no body, so this returns nothing; a 404/422 throws with the Spanish
+// `mensaje` like every other call.
+export async function deleteIntervention(interventionId) {
+  const response = await fetch(`/api/interventions/${interventionId}`, {
+    method: 'DELETE',
+    headers: await authHeader(),
+  })
+  if (response.status === 204) return
+  await unwrap(response) // non-2xx: throws with the backend's mensaje
+}
+
+// POST /api/interventions/:id/correction — corrects a record by SUPERSEDING it
+// (M8.2): the backend saves a NEW record with the edited fields (re-validated
+// like a fresh one) and soft-deletes the old one. Leaner body than /api/records:
+// no device_timestamp (the replacement keeps the ORIGINAL dictation's date — a
+// correction fixes what the record says, not when it happened) and no
+// transcription (the audit trail is inherited). `transactionId` is a FRESH
+// crypto.randomUUID captured once and reused on retry (idempotency, rule 3).
+// Returns the saved replacement record.
+export async function correctIntervention(interventionId, { fields, transactionId }) {
+  const response = await fetch(`/api/interventions/${interventionId}/correction`, {
+    method: 'POST',
+    headers: { ...(await authHeader()), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fields, transaction_id: transactionId }),
+  })
+  return unwrap(response)
+}
+
 // POST /api/transcribe — speech-to-text ONLY (no extraction, no persistence).
 // Used to dictate the assessment reason: returns the transcribed text so the PWA
 // can drop it into an editable box for the advisor to review before submitting.

@@ -1,5 +1,10 @@
 import { useEffect, useState } from 'react'
-import { assessEffectiveness, confirmExecution, getPdfUrl } from './api.js'
+import {
+  assessEffectiveness,
+  confirmExecution,
+  deleteIntervention,
+  getPdfUrl,
+} from './api.js'
 import Dictate from './Dictate.jsx'
 import Icon from './Icon.jsx'
 
@@ -220,6 +225,45 @@ export function ConfirmExecution({ interventionId, onConfirmed }) {
         </button>
       </div>
     </div>
+  )
+}
+
+// Soft-deletes the record (M8.2) behind a native confirm() — destructive, so
+// the extra tap is deliberate. The backend never removes the row (hard rule 1):
+// it just stops being visible in the app. On success the parent leaves the
+// screen, since the record no longer exists for the UI.
+export function DeleteRecord({ interventionId, onDeleted }) {
+  const [status, setStatus] = useState('idle') // idle | deleting | error
+  const [error, setError] = useState('')
+
+  async function remove() {
+    if (!window.confirm('¿Eliminar este registro? Dejará de aparecer en el cuaderno.')) {
+      return
+    }
+    setStatus('deleting')
+    setError('')
+    try {
+      await deleteIntervention(interventionId)
+      onDeleted()
+    } catch (err) {
+      setError(err.message)
+      setStatus('error')
+    }
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={remove}
+        disabled={status === 'deleting'}
+        className={`${CHIP.terra} disabled:opacity-50`}
+      >
+        <Icon name="trash" className="h-4 w-4" />
+        {status === 'deleting' ? 'Eliminando…' : 'Eliminar registro'}
+      </button>
+      {status === 'error' && <p className="mt-1 text-xs text-terra">{error}</p>}
+    </>
   )
 }
 

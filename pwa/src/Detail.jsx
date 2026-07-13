@@ -3,7 +3,12 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { getIntervention } from './api.js'
 import AppBar from './AppBar.jsx'
 import Icon from './Icon.jsx'
-import { AssessEffectiveness, ConfirmExecution, PdfButton } from './RecordActions.jsx'
+import {
+  AssessEffectiveness,
+  ConfirmExecution,
+  DeleteRecord,
+  PdfButton,
+} from './RecordActions.jsx'
 
 // Spanish label + icon + colour per lifecycle state. `grad` tints the hero badge
 // with a soft brand gradient; `tint`/`text` drive the small pill.
@@ -206,7 +211,8 @@ function Detail() {
             {/* PRESCRIPTION */}
             {r.lifecycle_state === 'PRESCRIBED' && (
               <Section title="Tratamiento prescrito">
-                <KV k="Producto (nº MAPA)" v={r.product_registration_number} />
+                <KV k="Producto" v={r.product?.trade_name} />
+                <KV k="Nº registro MAPA" v={r.product_registration_number} />
                 <KV
                   k="Dosis"
                   v={r.prescribed_dose != null && `${r.prescribed_dose} ${r.dose_unit ?? ''}`.trim()}
@@ -223,7 +229,8 @@ function Detail() {
             {(r.lifecycle_state === 'EXECUTED' ||
               r.lifecycle_state === 'ASSESSED') && (
               <Section title="Aplicación real">
-                <KV k="Producto (nº MAPA)" v={r.product_registration_number} />
+                <KV k="Producto" v={r.product?.trade_name} />
+                <KV k="Nº registro MAPA" v={r.product_registration_number} />
                 <KV
                   k="Dosis aplicada"
                   v={r.applied_dose != null && `${r.applied_dose} ${r.dose_unit ?? ''}`.trim()}
@@ -303,7 +310,8 @@ function Detail() {
             )}
 
             {/* Actions live here now (moved off the list row). The PDF download
-                for prescriptions, and confirming a prescription's execution. */}
+                for prescriptions, confirming a prescription's execution, and the
+                M8.2 correction/deletion. */}
             <div className="mt-6 flex flex-col border-t border-line pt-3">
               {r.has_pdf && <PdfButton interventionId={r.id} />}
               {r.lifecycle_state === 'PRESCRIBED' && (
@@ -322,6 +330,27 @@ function Detail() {
                   onAssessed={() => setReloadKey((k) => k + 1)}
                 />
               )}
+              {/* Correction (M8.2) only before execution: correcting an EXECUTED
+                  record through this flow would drop its captured weather/real
+                  applied data, so that slice waits until it is actually needed.
+                  Deletion is allowed in any state — the row is soft-deleted, so
+                  the legal data is preserved either way. */}
+              {(r.lifecycle_state === 'OBSERVATION' ||
+                r.lifecycle_state === 'PRESCRIBED') && (
+                <button
+                  type="button"
+                  onClick={() => navigate(`/registro/${r.id}/corregir`)}
+                  className="mt-2 inline-flex items-center gap-1.5 self-start rounded-lg bg-olive/10 px-3 py-2 text-xs font-semibold text-olive transition active:scale-[0.97]"
+                >
+                  <Icon name="pen" className="h-4 w-4" />
+                  Corregir registro
+                </button>
+              )}
+              <DeleteRecord
+                interventionId={r.id}
+                // The record no longer exists for the UI: back to the Home list.
+                onDeleted={() => navigate('/', { replace: true })}
+              />
             </div>
 
             <div className="h-8" />

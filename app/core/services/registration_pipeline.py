@@ -154,12 +154,18 @@ class RegistrationPipeline:
         transaction_id: UUID,
         device_timestamp: datetime,
         transcription: str,
+        supersedes: UUID | None = None,
+        created_at: datetime | None = None,
     ) -> Intervention:
         """Phase 2: resolve + VALIDATE (on the advisor-edited fields) + build +
         PDF + persist. ``fields`` is untrusted client input (edited by hand after
         the preview), so it still passes ExtractedFields and the legal validation
         (hard rules 4/5). ``transcription`` is the ORIGINAL audio transcription,
-        stored as the audit trail regardless of what the advisor edited."""
+        stored as the audit trail regardless of what the advisor edited.
+        ``supersedes`` and ``created_at`` (M8.2) mark the new row as the
+        correction of an existing record and keep its predecessor's place in
+        every created_at-driven view — CorrectionService sets them, the plain
+        FLUJO A leaves both None (the DB stamps created_at itself)."""
         with timed("FLUJO A: commit (total)"):
             return await self._commit(
                 fields=fields,
@@ -167,6 +173,8 @@ class RegistrationPipeline:
                 transaction_id=transaction_id,
                 device_timestamp=device_timestamp,
                 transcription=transcription,
+                supersedes=supersedes,
+                created_at=created_at,
             )
 
     async def _commit(
@@ -177,6 +185,8 @@ class RegistrationPipeline:
         transaction_id: UUID,
         device_timestamp: datetime,
         transcription: str,
+        supersedes: UUID | None,
+        created_at: datetime | None,
     ) -> Intervention:
         # 1. Idempotency (hard rule 3): a retry returns the existing row.
         existing = await self._repo.get_intervention_by_transaction_id(transaction_id)
@@ -220,6 +230,8 @@ class RegistrationPipeline:
             transaction_id=transaction_id,
             device_timestamp=device_timestamp,
             transcription=transcription,
+            supersedes=supersedes,
+            created_at=created_at,
         )
         validate_transition(None, intervention.lifecycle_state)
 
@@ -318,6 +330,8 @@ class RegistrationPipeline:
         transaction_id: UUID,
         device_timestamp: datetime,
         transcription: str,
+        supersedes: UUID | None,
+        created_at: datetime | None,
     ) -> Intervention:
         state = _RECORD_TYPE_TO_STATE[fields.record_type]
 
@@ -327,6 +341,10 @@ class RegistrationPipeline:
             advisor_id=advisor_id,
             holding_id=plot.holding_id,  # records belong to the HOLDING (rule 6)
             plot_id=plot.id,
+            supersedes_intervention_id=supersedes,
+            # None for a fresh record (the DB stamps it); a correction inherits
+            # its predecessor's, keeping its place in lists/campaign periods.
+            created_at=created_at,
             raw_transcription=transcription,
             prompt_version=self._extractor.prompt_version,
             audit_state="VALID",
