@@ -24,6 +24,7 @@ from app.core.domain.models import (
     Holding,
     Intervention,
     Plot,
+    Product,
     Validation,
     ValidationType,
 )
@@ -194,10 +195,17 @@ def test_get_intervention_detail_200(client, monkeypatch):
         return Equipment(holding_id=iv.holding_id, equipment_alias="tractor",
                          roma_number="ROMA-30-00077", id=equipment_id)
 
+    async def fake_product(registration_number):
+        assert registration_number == "ES-1"
+        return Product(registration_number="ES-1", trade_name="Abamectina",
+                       active_substance="abamectina")
+
     monkeypatch.setattr(container.repository, "get_intervention", fake_get)
     monkeypatch.setattr(container.repository, "get_plot", fake_plot)
     monkeypatch.setattr(container.repository, "get_holding", fake_holding)
     monkeypatch.setattr(container.repository, "get_equipment", fake_equipment)
+    monkeypatch.setattr(container.repository,
+                        "get_product_by_registration_number", fake_product)
 
     r = client.get(f"/api/interventions/{iv.id}")
     assert r.status_code == 200, r.text
@@ -208,6 +216,9 @@ def test_get_intervention_detail_200(client, monkeypatch):
     assert body["plot"]["sigpac"] == "30:015:012:00045:003"
     assert body["holding"]["owner_name"] == "José Ruiz"
     assert body["equipment"]["equipment_alias"] == "tractor"
+    # The M8.2 product block: the trade name the detail shows and the
+    # correction form prefills (the record itself stores only the MAPA number).
+    assert body["product"]["trade_name"] == "Abamectina"
 
 
 def test_get_intervention_detail_404(client, monkeypatch):
