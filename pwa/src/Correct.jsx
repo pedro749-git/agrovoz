@@ -63,6 +63,9 @@ function Correct() {
   const [status, setStatus] = useState('loading') // loading | ready | saving | error
   const [loadError, setLoadError] = useState('')
   const [saveError, setSaveError] = useState('')
+  // Code of the last save failure ("DOSE_ERROR", ...): a correction is
+  // re-validated like a fresh record, so legal blocks get the same card.
+  const [saveErrorCode, setSaveErrorCode] = useState(null)
   // The idempotency key for the REPLACEMENT record, captured once when the
   // screen mounts so a flaky-network retry reuses it (hard rule 3) instead of
   // creating two corrections.
@@ -98,6 +101,7 @@ function Correct() {
       // The backend's Spanish `mensaje` (a dose/area legal error, an unknown
       // product...) IS the feedback — shown in the form to fix and resubmit.
       setSaveError(err.message)
+      setSaveErrorCode(err.code ?? null)
       setStatus('ready')
     }
   }
@@ -128,6 +132,7 @@ function Correct() {
                 onCancel={() => navigate(-1)}
                 submitting={status === 'saving'}
                 error={saveError}
+                errorCode={saveErrorCode}
               />
             </div>
             <div className="h-8" />

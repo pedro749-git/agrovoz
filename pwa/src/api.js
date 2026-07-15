@@ -16,16 +16,22 @@ async function authHeader() {
 
 // Turns the backend's {error, mensaje} shape into a thrown Error carrying the
 // Spanish message, so callers can show `err.message` straight to the advisor.
+// The machine-readable code ("DOSE_ERROR", ...) rides along as `err.code` so
+// the UI can style legal-validation blocks differently from plain errors.
 async function unwrap(response) {
   if (response.ok) return response.json()
   let mensaje = 'Error inesperado. Inténtalo de nuevo.'
+  let code = null
   try {
     const body = await response.json()
     if (body?.mensaje) mensaje = body.mensaje
+    if (body?.error) code = body.error
   } catch {
     // Non-JSON error body (e.g. a proxy 502): keep the generic message.
   }
-  throw new Error(mensaje)
+  const error = new Error(mensaje)
+  error.code = code
+  throw error
 }
 
 // fetch() rejects (with a TypeError) only when the request never got an HTTP

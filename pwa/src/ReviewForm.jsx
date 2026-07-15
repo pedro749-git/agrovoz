@@ -66,7 +66,22 @@ function buildPayload(form) {
 // mis-heard value and on confirm the corrected ExtractedFields go to commit. The
 // original transcription is shown read-only as "lo que dictaste" for reference —
 // it is stored verbatim as the audit trail regardless of the edits.
-function ReviewForm({ transcription, fields, resolution, onConfirm, onCancel, submitting, error }) {
+// Commit failures whose cause is the LAW, not the form: product unauthorized,
+// dose over the product's maximum, area over the SIGPAC enclosure (hard rule 5).
+// They get a highlighted card instead of the plain error line — refusing an
+// illegal record is the app working, and it should read as such.
+const LEGAL_BLOCK_CODES = ['DOSE_ERROR', 'PRODUCT_ERROR', 'AREA_ERROR']
+
+function ReviewForm({
+  transcription,
+  fields,
+  resolution,
+  onConfirm,
+  onCancel,
+  submitting,
+  error,
+  errorCode,
+}) {
   const [form, setForm] = useState(() => ({ ...fields }))
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }))
 
@@ -220,12 +235,21 @@ function ReviewForm({ transcription, fields, resolution, onConfirm, onCancel, su
         </label>
       )}
 
-      {error && (
-        <p className="mt-3 flex items-start gap-1.5 text-xs text-terra">
-          <Icon name="alert-triangle" className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>{error}</span>
-        </p>
-      )}
+      {error &&
+        (LEGAL_BLOCK_CODES.includes(errorCode) ? (
+          <div className="mt-3 rounded-xl border border-terra/40 bg-terra/10 p-3">
+            <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-terra">
+              <Icon name="alert-triangle" className="h-4 w-4 shrink-0" />
+              Bloqueado por validación legal
+            </p>
+            <p className="mt-1.5 text-sm leading-relaxed text-soil">{error}</p>
+          </div>
+        ) : (
+          <p className="mt-3 flex items-start gap-1.5 text-xs text-terra">
+            <Icon name="alert-triangle" className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>{error}</span>
+          </p>
+        ))}
 
       <div className="mt-4 flex items-center gap-4">
         <button

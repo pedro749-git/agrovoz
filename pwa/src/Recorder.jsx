@@ -4,6 +4,13 @@ import { deletePending, savePending } from './pendingTakes.js'
 import Icon from './Icon.jsx'
 import ReviewForm from './ReviewForm.jsx'
 
+// What the backend is (roughly) doing during the preview call, in order.
+const PREVIEW_STAGES = [
+  'Transcribiendo audio…',
+  'Extrayendo campos…',
+  'Comprobando catálogo…',
+]
+
 // Records an audio note and drives the two-phase FLUJO A (M8): the audio is first
 // PREVIEWED (transcribe + extract, nothing saved), the advisor reviews/corrects
 // the extracted fields in ReviewForm, and only then are they COMMITTED to the
@@ -28,6 +35,15 @@ function Recorder({ onSaved, restoreRef, onPendingChange }) {
   const [preview, setPreview] = useState(null) // { transcription, fields }
   const [status, setStatus] = useState('idle') // idle | previewing | committing | queued | done
   const [error, setError] = useState(null) // Spanish message shown on failure
+  // Machine code of the last COMMIT failure ("DOSE_ERROR", ...), so ReviewForm
+  // can render legal-validation blocks as a highlighted card. Only meaningful
+  // while `error` is set — it is overwritten together with it on every commit.
+  const [errorCode, setErrorCode] = useState(null)
+  // Index into PREVIEW_STAGES while previewing. The stages are TIMED, not real
+  // progress: the preview is one backend call, so the PWA cannot know which
+  // step (transcribe / extract / resolve) is running — this only makes the
+  // multi-second wait legible instead of a frozen label.
+  const [previewStage, setPreviewStage] = useState(0)
 
   // Loads a queued take as the current one, so it drives the normal preview →
   // review → commit flow with its ORIGINAL transactionId / deviceTimestamp
@@ -154,6 +170,14 @@ function Recorder({ onSaved, restoreRef, onPendingChange }) {
     if (!navigator.onLine) return queueTake()
     setStatus('previewing')
     setError(null)
+    setPreviewStage(0)
+    // Advance the label every 1.2s — quick enough that a ~3s preview still
+    // shows all three stages — and hold at the last one until the call returns.
+    // `finally` clears the timer on every exit path, including the early
+    // `return queueTake()`.
+    const stageTimer = setInterval(() => {
+      setPreviewStage((stage) => Math.min(stage + 1, PREVIEW_STAGES.length - 1))
+    }, 1200)
     try {
       setPreview(await previewRecord(take.blob))
       setStatus('idle')
@@ -161,6 +185,8 @@ function Recorder({ onSaved, restoreRef, onPendingChange }) {
       if (err.isNetwork) return queueTake()
       setError(err.message)
       setStatus('idle')
+    } finally {
+      clearInterval(stageTimer)
     }
   }
 
@@ -194,8 +220,9 @@ function Recorder({ onSaved, restoreRef, onPendingChange }) {
       if (err.isNetwork) return queueTake()
       // The backend's Spanish `mensaje` (a dose/area legal error, a missing
       // field, ...) IS the feedback — show it in the form so the advisor fixes
-      // the value and resubmits.
+      // the value and resubmits. The code tells ReviewForm HOW to show it.
       setError(err.message)
+      setErrorCode(err.code ?? null)
       setStatus('idle')
     }
   }
@@ -288,7 +315,7 @@ function Recorder({ onSaved, restoreRef, onPendingChange }) {
               className="flex-1 rounded-xl bg-olive py-3 font-bold text-white shadow-card transition hover:bg-olive-d active:scale-[0.98] disabled:opacity-60"
             >
               {status === 'previewing'
-                ? 'Transcribiendo…'
+                ? PREVIEW_STAGES[previewStage]
                 : error
                   ? 'Reintentar'
                   : 'Transcribir y revisar'}
@@ -315,6 +342,7 @@ function Recorder({ onSaved, restoreRef, onPendingChange }) {
           onCancel={discard}
           submitting={status === 'committing'}
           error={error}
+          errorCode={errorCode}
         />
       )}
     </div>
