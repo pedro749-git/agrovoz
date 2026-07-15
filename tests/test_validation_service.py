@@ -65,3 +65,55 @@ def test_limits_are_inclusive():
     # dose == max and area == enclosure are LEGAL (the rule is >, not >=).
     validate_registration(_fields(dose=1.5, treated_area_ha=5.0),
                           _plot(area=5.0), _product(max_dose=1.5))
+
+
+def test_dose_in_hl_is_converted_before_comparing():
+    # 0.5 hl/ha IS 50 L/ha: must be blocked against a 1.5 L/ha max even though
+    # the raw number (0.5) is below it — the original unit-blindness bug.
+    with pytest.raises(DoseError):
+        validate_registration(_fields(dose=0.5, dose_unit="hl/ha"),
+                              _plot(), _product(max_dose=1.5))
+
+
+def test_dose_in_ml_within_max_passes():
+    # 1500 ml/ha == 1.5 L/ha == the max: legal, must NOT be rejected.
+    validate_registration(_fields(dose=1500, dose_unit="ml/ha"),
+                          _plot(), _product(max_dose=1.5))
+
+
+def test_dictation_spelling_of_the_unit_is_understood():
+    # Qwen may echo the spoken form instead of the compact one.
+    validate_registration(_fields(dose=1.5, dose_unit="litros por hectárea"),
+                          _plot(), _product(max_dose=1.5))
+
+
+def test_unrecognized_unit_is_blocked():
+    # The app cannot certify a dose it cannot compare (hard rule 5): an unknown
+    # unit against a known catalog unit refuses to persist rather than guess.
+    with pytest.raises(DoseError):
+        validate_registration(_fields(dose=1.0, dose_unit="L/árbol"),
+                              _plot(), _product())
+
+
+def test_incomparable_denominators_are_blocked():
+    # cc/hl doses the spray mix; comparing with an L/ha max needs the spray
+    # volume -> not certifiable -> blocked.
+    with pytest.raises(DoseError):
+        validate_registration(_fields(dose=30, dose_unit="cc/hl"),
+                              _plot(), _product())
+
+
+def test_mass_dose_against_volume_max_is_blocked():
+    # Kg/ha against an L/ha catalog max: different dimensions, not comparable.
+    with pytest.raises(DoseError):
+        validate_registration(_fields(dose=1.0, dose_unit="Kg/ha"),
+                              _plot(), _product())
+
+
+def test_missing_unit_keeps_numeric_comparison():
+    # No dictated unit: assume the catalog's one (previous behavior).
+    validate_registration(_fields(dose=1.5, dose_unit=None),
+                          _plot(), _product(max_dose=1.5))
+    with pytest.raises(DoseError):
+        validate_registration(_fields(dose=1.6, dose_unit=None),
+                              _plot(), _product(max_dose=1.5))

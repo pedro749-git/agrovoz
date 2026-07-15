@@ -1179,3 +1179,15 @@ old + creates new + is idempotent on retry.
   would have to skip the M8 human review · IndexedDB here is best-effort
   storage (Safari may evict after ~7 days idle): a same-day sync buffer, not
   an archive — accepted · 2026-07-15
+- Dose validation made unit-aware (bug: it compared raw numbers, so 0.5 hl/ha
+  slipped past a 1.5 L/ha max) · two layers: prompt v2 gives Qwen the canonical
+  unit vocabulary and forbids converting magnitudes (a conversion mistake by the
+  LLM would silently write an illegal record — rule 4), while the backend keeps
+  the guarantee: `validation_service` normalizes both units (synonyms table +
+  hl/ml/cc/g factors, physical constants — no DB column), converts the dictated
+  dose to the catalog's unit and compares there · unknown units and incomparable
+  denominators (/hl spray concentration vs /ha surface — needs the spray volume)
+  are BLOCKED with a Spanish DoseError asking for the catalog's unit: the app
+  never certifies what it cannot check, never guesses · rejected alternative:
+  prompt-only fix (LLM output is untrusted, and the advisor can hand-edit the
+  unit in the review form) · 2026-07-15

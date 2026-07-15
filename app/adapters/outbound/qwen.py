@@ -26,8 +26,8 @@ dashscope.base_http_api_url = f"{settings.qwen_base_url}/api/v1"
 
 # The extraction prompt lives in a versioned file (methodology: every change
 # bumps the version, persisted in interventions.prompt_version).
-PROMPT_VERSION = "v1"
-_PROMPT_PATH = Path(__file__).resolve().parents[3] / "prompts" / "extraction_v1.md"
+PROMPT_VERSION = "v2"
+_PROMPT_PATH = Path(__file__).resolve().parents[3] / "prompts" / "extraction_v2.md"
 _EXTRACTION_PROMPT = _PROMPT_PATH.read_text(encoding="utf-8")
 
 
