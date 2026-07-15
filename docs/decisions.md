@@ -1191,3 +1191,12 @@ old + creates new + is idempotent on retry.
   never certifies what it cannot check, never guesses · rejected alternative:
   prompt-only fix (LLM output is untrusted, and the advisor can hand-edit the
   unit in the review form) · 2026-07-15
+- List cards enriched with the names the advisor recognises (product trade
+  name, plot alias, holding owner) · the intervention row only stores the MAPA
+  number + ids, and resolving names like the detail endpoint does (4 reads per
+  record) would be N+1 over a 500-row history · chosen: three BATCH lookups over
+  the distinct ids (`list_plots_by_ids` / `list_holdings_by_ids` /
+  `list_products_by_registration_numbers`, PostgREST `.in_()`), so the whole
+  list costs 3 extra queries regardless of size; missing rows degrade to null
+  names, never break the list · the PWA card shows the trade name (MAPA number
+  as fallback) and a "Finca de Pepe · José Ruiz" context line · 2026-07-15

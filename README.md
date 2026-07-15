@@ -69,6 +69,17 @@ brand palette), a **history** screen with a date-range filter
 (`/api/interventions` accepts `?from=&to=`), and voice dictation on the
 campaign-validation remarks.
 
+Pre-hackathon hardening (July 2026): an **offline pending queue** (a recording
+made without coverage is kept on the device — with playback — and manually
+retried or discarded from a "Pendientes" list, reusing its original idempotency
+key and device timestamp); **unit-aware dose validation** (the dictated dose is
+converted to the catalog's unit before checking the legal maximum — 0.5 hl/ha
+no longer slips past a 1.5 L/ha cap — and unknown or incomparable units are
+blocked; extraction prompt bumped to v2); a highlighted "blocked by legal
+validation" card and staged progress messages on the recording flow; a
+ready-to-dictate demo phrase on the empty list; and list cards showing the
+product's trade name and the plot/owner (resolved in batch, never per row).
+
 ## Stack
 
 **Backend**: Python 3.12 · FastAPI + Uvicorn · Pydantic V2 · Supabase
