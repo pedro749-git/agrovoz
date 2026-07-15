@@ -28,6 +28,23 @@ async function unwrap(response) {
   throw new Error(mensaje)
 }
 
+// fetch() rejects (with a TypeError) only when the request never got an HTTP
+// answer at all: offline, DNS failure, connection dropped mid-flight. That is
+// the one case where the recorder queues the audio locally instead of showing
+// an error, so we tag it with `isNetwork`. An HTTP 4xx/5xx is NOT that case —
+// the server answered (e.g. a 422 dose block) and its Spanish `mensaje` must
+// surface through unwrap() as always. Only the two recording calls use this;
+// elsewhere a network failure is just an error to show.
+async function fetchTaggingOffline(url, options) {
+  try {
+    return await fetch(url, options)
+  } catch {
+    const offline = new Error('Sin conexión con el servidor.')
+    offline.isNetwork = true
+    throw offline
+  }
+}
+
 // POST /api/records/preview — phase 1 (M8): uploads one audio note and gets back
 // the transcription + extracted fields, WITHOUT persisting. The advisor reviews
 // and corrects them before committing (hard rule 4: nothing from the LLM reaches
@@ -38,7 +55,7 @@ export async function previewRecord(audioBlob) {
   // A filename lets the backend infer the audio type (MediaRecorder gives webm).
   form.append('audio', audioBlob, 'note.webm')
 
-  const response = await fetch('/api/records/preview', {
+  const response = await fetchTaggingOffline('/api/records/preview', {
     method: 'POST',
     // NOTE: do not set Content-Type — the browser sets it WITH the multipart
     // boundary. Setting it by hand would corrupt the upload.
@@ -63,7 +80,7 @@ export async function previewRecord(audioBlob) {
 // `transcription` is the ORIGINAL audio transcription, stored as the audit trail
 // regardless of what the advisor edited.
 export async function commitRecord({ fields, transactionId, deviceTimestamp, transcription }) {
-  const response = await fetch('/api/records', {
+  const response = await fetchTaggingOffline('/api/records', {
     method: 'POST',
     headers: { ...(await authHeader()), 'Content-Type': 'application/json' },
     body: JSON.stringify({

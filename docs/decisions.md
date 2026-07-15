@@ -1164,3 +1164,18 @@ old + creates new + is idempotent on retry.
   7 days rejects freshly hijacked releases but is silently ignored by npm 10.9.8
   (takes effect on a newer npm) · use npm ci (not npm install) in CI/clean
   installs so the lockfile is enforced · 2026-07-13
+- Offline pending queue (manual retry) in the PWA · the M4 "offline queue" idea,
+  finally built minimal for the hackathon: when preview/commit cannot reach the
+  server (fetch TypeError / navigator.onLine false — an HTTP 422 is NOT queued,
+  the server answered), the take (blob + transactionId + deviceTimestamp, the
+  exact trio hard rules 2/3 demand a retry to reuse) is parked in IndexedDB
+  (`pendingTakes.js`, hand-rolled ~70-line wrapper, no new dependency) and Home
+  shows a "Pendientes de sincronizar" section with per-take playback, Reintentar
+  (feeds the take back into the Recorder via useImperativeHandle — an event, not
+  a prop — and replays the normal M8 preview → review → commit flow) and
+  Descartar (confirm dialog; legal because a pending take never reached the
+  server, so it was never a record) · retry is MANUAL, not Background Sync:
+  the API doesn't exist on iOS Safari (the reference device) and auto-sync
+  would have to skip the M8 human review · IndexedDB here is best-effort
+  storage (Safari may evict after ~7 days idle): a same-day sync buffer, not
+  an archive — accepted · 2026-07-15

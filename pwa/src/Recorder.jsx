@@ -1,5 +1,6 @@
-import { useRef, useState } from 'react'
+import { useImperativeHandle, useRef, useState } from 'react'
 import { commitRecord, previewRecord } from './api.js'
+import { deletePending, savePending } from './pendingTakes.js'
 import Icon from './Icon.jsx'
 import ReviewForm from './ReviewForm.jsx'
 
@@ -9,9 +10,14 @@ import ReviewForm from './ReviewForm.jsx'
 // legal record (hard rule 4: nothing from the LLM reaches the record unseen).
 // `onSaved` lets the parent refresh the day's list once a record lands.
 //
+// Offline: when the preview/commit cannot reach the server at all, the take is
+// parked in IndexedDB (see pendingTakes.js) instead of erroring. Home retries a
+// queued take by calling `restoreTake` through `restoreRef` (see below), and
+// `onPendingChange` tells Home to re-read the list after we queue or clear one.
+//
 // A component is just a function that returns the UI (JSX). React calls it to
 // paint the screen, and re-calls it ("re-render") whenever its state changes.
-function Recorder({ onSaved }) {
+function Recorder({ onSaved, restoreRef, onPendingChange }) {
   // --- State: values that, when they change, repaint the screen ---
   const [isRecording, setIsRecording] = useState(false) // are we recording now?
   // The finished take, kept so the advisor can replay it AND so a retry reuses
@@ -20,8 +26,34 @@ function Recorder({ onSaved }) {
   // The preview result once the audio is transcribed + extracted; drives the
   // review form. null until phase 1 succeeds.
   const [preview, setPreview] = useState(null) // { transcription, fields }
-  const [status, setStatus] = useState('idle') // idle | previewing | committing | done
+  const [status, setStatus] = useState('idle') // idle | previewing | committing | queued | done
   const [error, setError] = useState(null) // Spanish message shown on failure
+
+  // Loads a queued take as the current one, so it drives the normal preview →
+  // review → commit flow with its ORIGINAL transactionId / deviceTimestamp
+  // (hard rules 3 and 2 — the record keeps the clock of when it was dictated in
+  // the field, not of the retry). `fromPending` marks it so a successful commit
+  // also clears its queue entry.
+  function restoreTake(pendingTake) {
+    setTake((previous) => {
+      if (previous) URL.revokeObjectURL(previous.url)
+      return {
+        url: URL.createObjectURL(pendingTake.blob),
+        blob: pendingTake.blob,
+        transactionId: pendingTake.transactionId,
+        deviceTimestamp: pendingTake.deviceTimestamp,
+        fromPending: true,
+      }
+    })
+    setPreview(null)
+    setStatus('idle')
+    setError(null)
+  }
+
+  // Retrying is an EVENT (the advisor tapped "Reintentar"), not render data, so
+  // instead of reacting to a prop in an effect, Home calls restoreTake directly:
+  // useImperativeHandle publishes it on the ref Home passes in.
+  useImperativeHandle(restoreRef, () => ({ restoreTake }))
 
   // --- Refs: mutable boxes that survive re-renders but DON'T repaint ---
   // The MediaRecorder and the audio pieces are "machinery", not UI.
@@ -88,16 +120,45 @@ function Recorder({ onSaved }) {
     setIsRecording(false)
   }
 
+  // No network: park the take in IndexedDB and clear the screen. The advisor
+  // retries it by hand from Home's "Pendientes" list when coverage returns.
+  async function queueTake() {
+    try {
+      await savePending(take)
+      setTake((previous) => {
+        if (previous) URL.revokeObjectURL(previous.url)
+        return null
+      })
+      setPreview(null)
+      setError(null)
+      setStatus('queued')
+      onPendingChange?.()
+    } catch (err) {
+      // IndexedDB refused the write (private mode, quota). The take is still on
+      // screen, so ask the advisor to keep the app open instead of losing audio.
+      setError(
+        'Sin conexión, y no se pudo guardar el audio en el dispositivo. ' +
+          'Mantén la app abierta y reintenta cuando tengas cobertura.',
+      )
+      setStatus('idle')
+      console.error(err)
+    }
+  }
+
   // Phase 1: transcribe + extract the take, WITHOUT saving. Side-effect free, so
-  // pressing it again after a failure is a plain retry.
+  // pressing it again after a failure is a plain retry. Unreachable server →
+  // queue instead of erroring; a 422 with a Spanish mensaje still shows as error
+  // (there IS connection — queueing it again would never fix it).
   async function runPreview() {
     if (!take) return
+    if (!navigator.onLine) return queueTake()
     setStatus('previewing')
     setError(null)
     try {
       setPreview(await previewRecord(take.blob))
       setStatus('idle')
     } catch (err) {
+      if (err.isNetwork) return queueTake()
       setError(err.message)
       setStatus('idle')
     }
@@ -116,11 +177,21 @@ function Recorder({ onSaved }) {
         deviceTimestamp: take.deviceTimestamp,
         transcription: preview.transcription,
       })
+      if (take.fromPending) {
+        // Best-effort cleanup: if it fails, retrying the stale entry is harmless
+        // — the reused transactionId makes the backend return the existing
+        // record instead of duplicating it (hard rule 3).
+        await deletePending(take.transactionId).catch(console.error)
+        onPendingChange?.()
+      }
       setStatus('done')
       setTake(null) // clear the preview; the new record now appears in the list
       setPreview(null)
       onSaved?.() // ask the parent to refresh today's list
     } catch (err) {
+      // Connection dropped between review and confirm: queue the take so the
+      // reviewed audio survives; the retry replays preview → review → commit.
+      if (err.isNetwork) return queueTake()
       // The backend's Spanish `mensaje` (a dose/area legal error, a missing
       // field, ...) IS the feedback — show it in the form so the advisor fixes
       // the value and resubmits.
@@ -179,6 +250,17 @@ function Recorder({ onSaved }) {
         <p className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-moss">
           <Icon name="check-circle" className="h-4 w-4" />
           Registro guardado.
+        </p>
+      )}
+
+      {/* Offline: the take was parked in the pending queue, nothing was lost. */}
+      {status === 'queued' && (
+        <p className="mt-4 flex max-w-[17rem] items-start gap-1.5 text-sm font-semibold text-amber">
+          <Icon name="cloud" className="mt-0.5 h-4 w-4 shrink-0" />
+          <span className="text-left">
+            Sin conexión. El audio se ha guardado en «Pendientes de sincronizar»;
+            reintenta cuando tengas cobertura.
+          </span>
         </p>
       )}
 
