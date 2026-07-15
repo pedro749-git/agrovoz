@@ -74,13 +74,23 @@ function TodayList({ refreshKey }) {
     )
   }
   if (records.length === 0) {
+    // Besides saying the list is empty, TEACH the next step: a ready-to-dictate
+    // example phrase. A first-time user (hackathon judge on the seeded sandbox,
+    // where this exact farm/product/pest/equipment resolves) reads it, dictates
+    // it and sees the whole pipeline work without anyone explaining anything.
     return (
       <div className="mt-8 flex flex-col items-center text-center">
         <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-olive/10 text-olive">
           <Icon name="leaf" className="h-7 w-7" />
         </div>
         <p className="mt-3 max-w-[15rem] text-sm text-ink">
-          Aún no hay registros hoy. Graba el primero.
+          Aún no hay registros hoy. Pulsa el micrófono y prueba a dictar:
+        </p>
+        {/* Verbatim the first few-shot example in prompts/extraction_v1.md, so
+            this exact dictation is the best-rehearsed path in the pipeline. */}
+        <p className="mt-3 max-w-[16rem] rounded-xl border border-dashed border-olive/40 bg-olive/5 px-4 py-3 text-sm font-medium italic leading-relaxed text-olive-d">
+          «Finca de Pepe, hay que aplicar Abamectina a uno con cinco litros por
+          hectárea contra araña roja con el tractor»
         </p>
       </div>
     )
