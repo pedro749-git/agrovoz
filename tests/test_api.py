@@ -142,12 +142,45 @@ def test_unexpected_error_maps_to_500(client, monkeypatch):
 
 
 def test_list_interventions_200(client, monkeypatch):
+    # The endpoint resolves the card names (trade name, plot alias, owner) in
+    # three batch lookups; fake them with context for iv1 only, so iv2 also
+    # proves the fallback (missing row -> null names, never an error).
+    iv1, iv2 = _intervention(), _intervention(LifecycleState.EXECUTED)
+
     async def fake_list(advisor_id, *, state=None, since=None, until=None):
         assert advisor_id == ADV
-        return [_intervention(), _intervention(LifecycleState.EXECUTED)]
+        return [iv1, iv2]
+
+    async def fake_plots(plot_ids):
+        return [Plot(
+            holding_id=iv1.holding_id, voice_alias="Finca de Pepe",
+            crop="Limonero", enclosure_area_ha=3.5, sigpac_province="30",
+            sigpac_municipality="015", sigpac_polygon="012",
+            sigpac_parcel="00045", sigpac_enclosure="003", id=iv1.plot_id)]
+
+    async def fake_holdings(holding_ids):
+        return [Holding(advisor_id=ADV, owner_name="José Ruiz", owner_nif="1",
+                        rea_regepa_number="REA-30-00123", id=iv1.holding_id)]
+
+    async def fake_products(registration_numbers):
+        return [Product(registration_number="ES-1", trade_name="Abamectina",
+                        active_substance="abamectina")]
+
     monkeypatch.setattr(container.repository, "list_interventions", fake_list)
+    monkeypatch.setattr(container.repository, "list_plots_by_ids", fake_plots)
+    monkeypatch.setattr(container.repository, "list_holdings_by_ids", fake_holdings)
+    monkeypatch.setattr(
+        container.repository, "list_products_by_registration_numbers", fake_products
+    )
     r = client.get("/api/interventions")
     assert r.status_code == 200 and len(r.json()) == 2
+    first, second = r.json()
+    assert first["product_trade_name"] == "Abamectina"
+    assert first["plot_alias"] == "Finca de Pepe"
+    assert first["holding_owner_name"] == "José Ruiz"
+    # iv2's plot/holding were not in the batch results: names are null.
+    assert second["plot_alias"] is None
+    assert second["holding_owner_name"] is None
 
 
 def test_list_interventions_date_range_maps_to_utc_window(client, monkeypatch):

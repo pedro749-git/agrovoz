@@ -199,6 +199,44 @@ class SupabaseRepository(Repository):
         res = await _run(query.order("created_at", desc=True).limit(500))
         return [_deserialize(Intervention, row) for row in res.data]
 
+    async def list_plots_by_ids(self, plot_ids: list[UUID]) -> list[Plot]:
+        if not plot_ids:
+            return []
+        client = await get_client()
+        res = await _run(
+            client.table("plots")
+            .select("*")
+            .in_("id", [str(i) for i in plot_ids])
+            .is_("deleted_at", "null")
+        )
+        return [_deserialize(Plot, row) for row in res.data]
+
+    async def list_holdings_by_ids(self, holding_ids: list[UUID]) -> list[Holding]:
+        if not holding_ids:
+            return []
+        client = await get_client()
+        res = await _run(
+            client.table("holdings")
+            .select("*")
+            .in_("id", [str(i) for i in holding_ids])
+            .is_("deleted_at", "null")
+        )
+        return [_deserialize(Holding, row) for row in res.data]
+
+    async def list_products_by_registration_numbers(
+        self, registration_numbers: list[str]
+    ) -> list[Product]:
+        if not registration_numbers:
+            return []
+        # Read-only MAPA catalog: no deleted_at column to filter.
+        client = await get_client()
+        res = await _run(
+            client.table("products")
+            .select("*")
+            .in_("registration_number", registration_numbers)
+        )
+        return [_deserialize(Product, row) for row in res.data]
+
     async def get_holding(self, holding_id: UUID) -> Holding | None:
         client = await get_client()
         res = await _run(

@@ -248,7 +248,34 @@ async def list_interventions(
     interventions = await container.repository.list_interventions(
         advisor_id, state=state, since=since, until=until
     )
-    return JSONResponse(content=[presenters.record_fields(i) for i in interventions])
+    # The names each card shows (trade name, plot alias, owner) resolved in
+    # THREE batch queries over the distinct ids — never one query per row.
+    plot_ids = {i.plot_id for i in interventions if i.plot_id is not None}
+    holding_ids = {i.holding_id for i in interventions if i.holding_id is not None}
+    product_numbers = {
+        i.product_registration_number
+        for i in interventions
+        if i.product_registration_number is not None
+    }
+    plots = await container.repository.list_plots_by_ids(list(plot_ids))
+    holdings = await container.repository.list_holdings_by_ids(list(holding_ids))
+    products = await container.repository.list_products_by_registration_numbers(
+        list(product_numbers)
+    )
+    plot_by_id = {p.id: p for p in plots}
+    holding_by_id = {h.id: h for h in holdings}
+    product_by_number = {p.registration_number: p for p in products}
+    return JSONResponse(
+        content=[
+            presenters.record_fields(
+                i,
+                plot=plot_by_id.get(i.plot_id),
+                holding=holding_by_id.get(i.holding_id),
+                product=product_by_number.get(i.product_registration_number),
+            )
+            for i in interventions
+        ]
+    )
 
 
 @app.get("/api/interventions/{intervention_id}")

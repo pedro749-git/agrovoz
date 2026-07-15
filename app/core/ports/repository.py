@@ -61,6 +61,25 @@ class Repository(ABC):
         read."""
 
     @abstractmethod
+    async def list_plots_by_ids(self, plot_ids: list[UUID]) -> list[Plot]:
+        """Batch lookup for the list projection (each card shows its plot
+        alias): the whole list resolves its plots in ONE query over the
+        distinct ids, never one query per row. Filters ``deleted_at IS NULL``."""
+
+    @abstractmethod
+    async def list_holdings_by_ids(self, holding_ids: list[UUID]) -> list[Holding]:
+        """Batch lookup for the list projection (each card shows the holding's
+        owner). Same one-query contract as ``list_plots_by_ids``."""
+
+    @abstractmethod
+    async def list_products_by_registration_numbers(
+        self, registration_numbers: list[str]
+    ) -> list[Product]:
+        """Batch lookup for the list projection (each card shows the trade name
+        instead of the MAPA number). The products catalog is read-only and not
+        soft-deleted, so no ``deleted_at`` filter."""
+
+    @abstractmethod
     async def get_holding(self, holding_id: UUID) -> Holding | None:
         """The record belongs to the HOLDING (rule 6); needed to render the
         prescription PDF (owner, NIF, REA/REGEPA)."""

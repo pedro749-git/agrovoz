@@ -62,10 +62,19 @@ def preview_result(preview: PreviewResult) -> dict:
     }
 
 
-def record_fields(intervention: Intervention) -> dict:
+def record_fields(
+    intervention: Intervention,
+    *,
+    plot: Plot | None = None,
+    holding: Holding | None = None,
+    product: Product | None = None,
+) -> dict:
     """Common record fields shared by the create response and the list endpoint.
 
     ``has_pdf`` lets the list show a PDF affordance without signing a URL per row.
+    The optional context rows carry the names each list card shows (the trade
+    name the advisor recognises, and which plot/owner the record is about);
+    the list endpoint resolves them in batch, other callers omit them (null).
     """
     dose = intervention.applied_dose or intervention.prescribed_dose
     return {
@@ -94,6 +103,9 @@ def record_fields(intervention: Intervention) -> dict:
         # non-blocking notice the PWA surfaces on executed records.
         "iteaf_warning": intervention.iteaf_warning,
         "has_pdf": intervention.prescription_pdf_key is not None,
+        "product_trade_name": product.trade_name if product else None,
+        "plot_alias": plot.voice_alias if plot else None,
+        "holding_owner_name": holding.owner_name if holding else None,
     }
 
 

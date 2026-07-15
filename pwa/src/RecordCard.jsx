@@ -52,6 +52,9 @@ function RecordCard({ record: r }) {
     tint: 'bg-ink/10',
   }
   const weather = weatherCells(r)
+  // "Finca de Pepe · José Ruiz": which plot and whose holding, so cards from
+  // different fincas tell apart at a glance. Skips whatever is missing.
+  const context = [r.plot_alias, r.holding_owner_name].filter(Boolean).join(' · ')
 
   return (
     <li
@@ -78,12 +81,26 @@ function RecordCard({ record: r }) {
         </span>
       </div>
 
-      {/* Observations carry free text; treatments carry product + dose. */}
+      {context && (
+        <p className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-ink">
+          <Icon name="leaf" className="h-3.5 w-3.5" />
+          {context}
+        </p>
+      )}
+
+      {/* Observations carry free text; treatments carry product + dose. Snug
+          under the context line when there is one, normal gap otherwise. */}
       {r.observation ? (
-        <p className="mt-2.5 text-sm leading-relaxed text-soil">{r.observation}</p>
+        <p className={`${context ? 'mt-1' : 'mt-2.5'} text-sm leading-relaxed text-soil`}>
+          {r.observation}
+        </p>
       ) : (
-        <div className="mt-2.5 text-sm text-soil">
-          <p className="font-semibold">{r.product_registration_number}</p>
+        <div className={`${context ? 'mt-1' : 'mt-2.5'} text-sm text-soil`}>
+          {/* Trade name the advisor recognises; MAPA number as fallback when
+              the product is not in the catalog. */}
+          <p className="font-semibold text-olive-d">
+            {r.product_trade_name ?? r.product_registration_number}
+          </p>
           <p className="text-ink">
             {r.dose != null && `${r.dose} ${r.dose_unit ?? ''}`.trim()}
             {r.target_pest && ` · ${r.target_pest}`}
