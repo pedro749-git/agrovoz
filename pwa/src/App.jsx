@@ -3,6 +3,7 @@ import { Navigate, Route, Routes, useNavigate } from 'react-router-dom'
 import { useSession } from './useSession.js'
 import { bootstrap } from './api.js'
 import Login from './Login.jsx'
+import Privacy from './Privacy.jsx'
 import Settings from './Settings.jsx'
 import Home from './Home.jsx'
 import Detail from './Detail.jsx'
@@ -49,9 +50,15 @@ function App() {
   }
 
   // Not logged in -> the login screen (email OTP code / password). `useSession`
-  // flips us to the app automatically once the session appears.
+  // flips us to the app automatically once the session appears. The privacy
+  // notice must stay reachable here: the login screen links to it (RGPD).
   if (!session) {
-    return <Login />
+    return (
+      <Routes>
+        <Route path="/privacidad" element={<Privacy />} />
+        <Route path="*" element={<Login />} />
+      </Routes>
+    )
   }
 
   // Just signed up: hold on a brief "preparing your account" screen while the
@@ -72,6 +79,7 @@ function App() {
       <Route path="/registro/:id/corregir" element={<Correct />} />
       <Route path="/validaciones" element={<Validation />} />
       <Route path="/ajustes" element={<SettingsRoute session={session} />} />
+      <Route path="/privacidad" element={<Privacy />} />
       {/* Unknown path -> home (e.g. a stale deep link). */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
