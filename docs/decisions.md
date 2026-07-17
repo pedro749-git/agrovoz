@@ -1200,3 +1200,80 @@ old + creates new + is idempotent on retry.
   list costs 3 extra queries regardless of size; missing rows degrade to null
   names, never break the list · the PWA card shows the trade name (MAPA number
   as fallback) and a "Finca de Pepe · José Ruiz" context line · 2026-07-15
+- Signup code-step copy made generic ("Introdúcelo para continuar: crearemos
+  tu cuenta o, si tu correo ya tenía una, iniciaremos sesión con ella", button
+  "Continuar") · Supabase's signInWithOtp(shouldCreateUser) silently sends a
+  plain LOGIN code when the email already has an account, so the old "Crear
+  cuenta y entrar" copy lied to returning users, who ended inside their old
+  account believing they had created a new one · DISCARDED detecting the case:
+  (a) pre-send probe with shouldCreateUser:false lets anyone enumerate
+  registered emails from the signup form (the very leak the password login
+  avoids) and clashes with the single-use Turnstile token, which the
+  retry-with-create call would burn twice; (b) post-verify `created:false`
+  flag from /api/bootstrap + notice screen warns too late and adds a backend
+  field + an App screen for a TEMPORARY hackathon flow — honest copy that
+  covers both cases costs two strings and zero code · 2026-07-17
+- RGPD privacy notice added (static /privacidad page + "Al continuar aceptas
+  la política de privacidad" line under the login/signup card) · the app
+  handles real personal data (email, voice audio sent to DashScope, third-party
+  names/NIF/ROPO inside records) and its whole pitch is legal compliance, so
+  shipping with zero RGPD surface was incoherent · the notice is
+  prototype-honest: names the real processors (Supabase, Alibaba Cloud OSS +
+  DashScope with possible non-EEA transfer, AEMET/Open-Meteo coordinates only),
+  legal bases 6.1.b (service) and 6.1.c (RD 1311/2012 3-year retention — which
+  is why deletion is soft, tying hard rule 1 to art. 17's legal-obligation
+  limit), and warns not to enter real third-party data in a demo · DISCARDED
+  for now: consent checkbox (friction for judges — the inline line suffices for
+  a demo; a real deployment would add it), cookie banner (only strictly
+  necessary storage: session + offline queue), formal RGPD paperwork (RAT,
+  processor DPAs, transfer impact assessment — for when there is a real user) ·
+  route is public in both router branches so the logged-out login screen can
+  link it · 2026-07-17
+- Desktop polish pass on the PWA · brand casing unified as "AgroVoz" (AppBar,
+  login, manifest, privacy page) · every interactive element got a hover state
+  with one consistent language per kind — solid olive buttons darken
+  (hover:bg-olive-d), tinted chips deepen their tint (/10→/20), plain text
+  links underline, AppBar icon buttons gain the same soft white wash their
+  active state uses, record cards tint their border — because the demo is also
+  judged on desktop, where only 4 of 15 components had any pointer feedback ·
+  dropped the decorative leaf marks on the login card and the empty today-list
+  (the AppBar already carries the brand; the empty state's job is the example
+  phrase, not decoration) · "Historial" link restyled as a tinted chip, same
+  recipe as the detail screen's action chips · 2026-07-17
+- Login turned into a cover page: AppBar removed there and replaced by a brand
+  block — a spoken-word waveform (7 uneven bars, olive opacity ramp fading at
+  the edges; uneven on purpose, real speech is not a symmetric equalizer) over
+  a big "AgroVoz" wordmark ("Voz" in the olive gradient) and the tagline · the
+  leaf mark's removal had left the screen bare, and keeping the AppBar would
+  have printed the brand twice on one screen; the waveform ties the mark to
+  the product's core gesture (dictating) instead of generic agro imagery ·
+  2026-07-17
+- Detail-screen actions restyled from a pile of tinted chips (each its own
+  width/colour, ragged left) into an "Acciones" section matching the screen's
+  card language: one bg-card rounded-2xl card of full-width ActionRow rows
+  (tinted icon tile in the action's semantic tone + soil label + chevron,
+  delete in terra), dividers via divide-y — which works because every action
+  component renders a single root whether collapsed or expanded, so the
+  expanding confirm/assess forms open inside the card under their own bold
+  title · discarded a solid primary CTA + secondary links (hierarchizes
+  actions that are peers) and merely equal-width chips (still a foreign colour
+  block on that screen) · 2026-07-17
+- Removed the permanent hint under the record button ("Dicta una observación o
+  una prescripción…") · it duplicated what the button (REGISTRAR + mic) and
+  the empty today-list's example phrase already teach, overloading the home
+  with text · the recording-state hint ("Pulsa de nuevo para terminar") stays:
+  it only shows mid-action and teaches the one non-obvious gesture, that the
+  same button stops · 2026-07-17
+- Replaced the app icon/favicon — it was still Vite's template purple bolt
+  (favicon.svg + both manifest PNGs), i.e. a foreign brand on the browser tab
+  and the installed-app icon · new mark = the login's waveform on the olive
+  gradient: favicon.svg hand-written, PNGs (192/512) drawn with Pillow
+  full-bleed with the bars inside the maskable safe zone so one file serves
+  the `any` and `maskable` purposes · already-installed PWAs keep the old
+  icon until reinstalled · 2026-07-17
+- Replaced the two window.confirm() dialogs (discard pending take, delete
+  record) with an in-app ConfirmDialog (backdrop + card in the app's visual
+  language, terra confirm button) · the native dialog broke the demo's look
+  and leaks the site URL in its title; the two-step guarantee for destructive
+  actions is unchanged — the action only runs from the dialog's confirm ·
+  2026-07-17
