@@ -1277,3 +1277,10 @@ old + creates new + is idempotent on retry.
   and leaks the site URL in its title; the two-step guarantee for destructive
   actions is unchanged — the action only runs from the dialog's confirm ·
   2026-07-17
+- ReviewForm gained the execution-only fields (caldo, aplicador, ROPO del
+  aplicador), shown only when record_type is EXECUTION · they existed in
+  ExtractedFields and rode along uneditable, so a directly-dictated execution
+  (or a correction switched to Ejecución) could not fix a mis-heard operator
+  or spray volume in review — FLUJO B's confirm form covered only the
+  prescription→execution path · same labels as that form; backend unchanged
+  (fields were already optional in the schema) · 2026-07-17

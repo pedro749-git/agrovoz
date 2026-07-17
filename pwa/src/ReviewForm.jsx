@@ -36,8 +36,8 @@ function FieldStatus({ found, detail, missLabel }) {
 
 // Turns the edited form back into an ExtractedFields payload: numbers coerced,
 // blank optionals -> null. Fields not shown in the form (previous_alternatives,
-// planned_date, operator_*) ride along from the initial spread, so no value the
-// LLM extracted is lost on commit even if it isn't editable in this slice.
+// planned_date) ride along from the initial spread, so no value the LLM
+// extracted is lost on commit even if it isn't editable in this slice.
 function buildPayload(form) {
   const num = (v) => (v === '' || v == null ? null : Number(v))
   const str = (v) => (v == null || String(v).trim() === '' ? null : v)
@@ -213,6 +213,41 @@ function ReviewForm({
               className={fieldClass}
             />
           </label>
+          {/* Execution-only fields, same labels as the FLUJO B confirm form
+              (RecordActions): a directly-dictated execution gets them from the
+              LLM, so they must be correctable here too. */}
+          {form.record_type === 'EXECUTION' && (
+            <>
+              <label className="mt-2 block text-xs font-semibold text-ink">
+                Caldo en L/ha (opcional)
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  value={form.spray_volume_l_ha ?? ''}
+                  onChange={set('spray_volume_l_ha')}
+                  className={fieldClass}
+                />
+              </label>
+              <label className="mt-2 block text-xs font-semibold text-ink">
+                Aplicador (opcional)
+                <input
+                  type="text"
+                  value={form.operator_name ?? ''}
+                  onChange={set('operator_name')}
+                  className={fieldClass}
+                />
+              </label>
+              <label className="mt-2 block text-xs font-semibold text-ink">
+                ROPO del aplicador (opcional)
+                <input
+                  type="text"
+                  value={form.operator_ropo ?? ''}
+                  onChange={set('operator_ropo')}
+                  className={fieldClass}
+                />
+              </label>
+            </>
+          )}
           <label className="mt-2 block text-xs font-semibold text-ink">
             Justificación (opcional)
             <textarea
