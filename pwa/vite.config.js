@@ -29,8 +29,8 @@ export default defineConfig({
       registerType: 'autoUpdate', // a new build silently replaces the old one
       injectRegister: 'auto', // auto-inject the service-worker registration, no manual code
       manifest: {
-        name: 'Agrovoz — Cuaderno GIP',
-        short_name: 'Agrovoz',
+        name: 'AgroVoz — Cuaderno GIP',
+        short_name: 'AgroVoz',
         description: 'Registro fitosanitario por voz para asesores GIP',
         lang: 'es',
         theme_color: '#3c4a22', // brand dark olive: the app bar colour once installed

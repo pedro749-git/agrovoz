@@ -105,7 +105,7 @@ function ReviewForm({
         «{transcription}»
       </p>
 
-      <span className="text-xs font-semibold text-ink">Tipo de registro</span>
+      <span className="text-xs font-semibold text-ink hover:underline">Tipo de registro</span>
       <div className="mb-2 mt-1 flex gap-1.5">
         {TYPES.map((t) => (
           <button
@@ -115,7 +115,7 @@ function ReviewForm({
             className={`flex-1 rounded-lg py-1.5 text-[11px] font-bold transition ${
               form.record_type === t.value
                 ? 'bg-olive text-white'
-                : 'border border-line text-ink'
+                : 'border border-line text-ink hover:bg-olive/5'
             }`}
           >
             {t.label}
@@ -256,7 +256,7 @@ function ReviewForm({
           type="button"
           onClick={() => onConfirm(buildPayload(form))}
           disabled={submitting}
-          className="rounded-xl bg-olive px-4 py-2.5 text-sm font-bold text-white shadow-card transition active:scale-[0.98] disabled:opacity-60"
+          className="rounded-xl bg-olive px-4 py-2.5 text-sm font-bold text-white shadow-card transition hover:bg-olive-d active:scale-[0.98] disabled:opacity-60"
         >
           {submitting ? 'Guardando…' : 'Confirmar y guardar'}
         </button>
@@ -264,7 +264,7 @@ function ReviewForm({
           type="button"
           onClick={onCancel}
           disabled={submitting}
-          className="text-xs font-semibold text-ink"
+          className="text-xs font-semibold text-ink hover:underline"
         >
           Descartar
         </button>

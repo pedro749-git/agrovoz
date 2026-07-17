@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { supabase } from './supabase.js'
-import AppBar from './AppBar.jsx'
-import Icon from './Icon.jsx'
 
 // Hackathon self-signup (TEMPORARY — see docs/decisions.md). Only when the build
 // sets VITE_HACKATHON_SIGNUP=true does the login expose a "Crear cuenta" path;
@@ -199,14 +198,41 @@ function Login() {
 
   return (
     <div className="flex min-h-dvh flex-col bg-bone text-soil">
-      <AppBar title="Agrovoz" subtitle="Cuaderno de campo por voz" />
-
-      <main className="flex flex-1 flex-col items-center justify-center px-6 pb-safe">
+      {/* No AppBar here: the login is the app's cover page, and the brand
+          appears once, big, instead of twice. pt-safe moves to <main>. */}
+      <main className="flex flex-1 flex-col items-center justify-center px-6 pb-safe pt-safe">
         <div className="w-full max-w-xs">
-          {/* Brand mark, so the login lands with the app's identity, not a bare form. */}
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-b from-olive to-olive-d text-white shadow-float">
-            <Icon name="leaf" className="h-8 w-8" />
+          {/* Brand block. The product's identity is the voice, so the artistic
+              mark is a spoken-word waveform over the wordmark: uneven bar
+              heights (like real speech, not a symmetric equalizer) fading out
+              at the edges, in the same olive ramp the buttons use. */}
+          <div className="mb-9 text-center">
+            <div className="flex items-end justify-center gap-1.5" aria-hidden="true">
+              {[
+                { h: 10, cls: 'bg-olive/30' },
+                { h: 24, cls: 'bg-olive/60' },
+                { h: 16, cls: 'bg-olive/80' },
+                { h: 38, cls: 'bg-gradient-to-b from-olive to-olive-d' },
+                { h: 28, cls: 'bg-olive/80' },
+                { h: 14, cls: 'bg-olive/60' },
+                { h: 20, cls: 'bg-olive/30' },
+              ].map((bar, i) => (
+                <span
+                  key={i}
+                  className={`w-1 rounded-full ${bar.cls}`}
+                  style={{ height: bar.h }}
+                />
+              ))}
+            </div>
+            <p className="mt-4 text-4xl font-black leading-none tracking-tight">
+              Agro
+              <span className="bg-gradient-to-b from-olive to-olive-d bg-clip-text text-transparent">
+                Voz
+              </span>
+            </p>
+            <p className="mt-2.5 text-sm text-ink">Cuaderno de campo por voz</p>
           </div>
+
           <h1 className="text-center text-lg font-bold">
             {method === 'signup' ? 'Crear cuenta de prueba' : 'Iniciar sesión'}
           </h1>
@@ -219,7 +245,7 @@ function Login() {
                 type="button"
                 onClick={() => switchMethod('code')}
                 className={`rounded-lg py-2 transition ${
-                  method === 'code' ? 'bg-olive text-white shadow-card' : 'text-ink'
+                  method === 'code' ? 'bg-olive text-white shadow-card' : 'text-ink hover:bg-olive/5'
                 }`}
               >
                 Código
@@ -228,7 +254,7 @@ function Login() {
                 type="button"
                 onClick={() => switchMethod('password')}
                 className={`rounded-lg py-2 transition ${
-                  method === 'password' ? 'bg-olive text-white shadow-card' : 'text-ink'
+                  method === 'password' ? 'bg-olive text-white shadow-card' : 'text-ink hover:bg-olive/5'
                 }`}
               >
                 Contraseña
@@ -302,7 +328,7 @@ function Login() {
                   setCode('')
                   setError(null)
                 }}
-                className="mt-4 w-full text-sm font-semibold text-olive"
+                className="mt-4 w-full text-sm font-semibold text-olive hover:underline"
               >
                 Usar otro correo
               </button>
@@ -387,13 +413,20 @@ function Login() {
             </form>
           )}
 
-          {/* Signup, step 2: verify the code (same as login's code step). */}
+          {/* Signup, step 2: verify the code (same as login's code step). The
+              copy is deliberately generic ("continuar", not "crear"): with
+              shouldCreateUser, Supabase silently sends a LOGIN code when the
+              email already has an account, and we cannot tell which case we are
+              in without leaking whether an email is registered — so the text
+              covers both. */}
           {method === 'signup' && codeSent && (
             <form onSubmit={verifyCode} className="mt-5">
               <p className="text-center text-sm leading-relaxed text-ink">
                 Hemos enviado un código a{' '}
                 <span className="font-semibold text-soil">{email}</span>.
-                Introdúcelo para terminar de crear tu cuenta.
+                Introdúcelo para continuar: crearemos tu cuenta de prueba o, si
+                tu correo ya tenía una, iniciaremos sesión con ella
+                automáticamente.
               </p>
 
               <input
@@ -415,7 +448,7 @@ function Login() {
                 disabled={status === 'sending'}
                 className="mt-4 w-full rounded-xl bg-olive py-3 font-bold text-white shadow-card transition hover:bg-olive-d active:scale-[0.98] disabled:opacity-60"
               >
-                {status === 'sending' ? 'Creando…' : 'Crear cuenta y entrar'}
+                {status === 'sending' ? 'Entrando…' : 'Continuar'}
               </button>
 
               <button
@@ -425,7 +458,7 @@ function Login() {
                   setCode('')
                   setError(null)
                 }}
-                className="mt-4 w-full text-sm font-semibold text-olive"
+                className="mt-4 w-full text-sm font-semibold text-olive hover:underline"
               >
                 Usar otro correo
               </button>
@@ -447,13 +480,23 @@ function Login() {
             <button
               type="button"
               onClick={() => switchMethod(method === 'signup' ? 'code' : 'signup')}
-              className="mt-6 w-full text-center text-sm font-semibold text-olive"
+              className="mt-6 w-full text-center text-sm font-semibold text-olive hover:underline"
             >
               {method === 'signup'
                 ? 'Ya tengo cuenta · Iniciar sesión'
                 : '¿Eres nuevo? Crea una cuenta de prueba'}
             </button>
           )}
+
+          {/* RGPD consent line — one line covers every way in (code, password,
+              signup); the actual notice lives at /privacidad. */}
+          <p className="mt-6 text-center text-xs leading-relaxed text-ink/70">
+            Al continuar aceptas la{' '}
+            <Link to="/privacidad" className="font-semibold text-olive underline">
+              política de privacidad
+            </Link>
+            .
+          </p>
         </div>
       </main>
     </div>

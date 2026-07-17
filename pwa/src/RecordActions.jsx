@@ -5,21 +5,55 @@ import {
   deleteIntervention,
   getPdfUrl,
 } from './api.js'
+import ConfirmDialog from './ConfirmDialog.jsx'
 import Dictate from './Dictate.jsx'
 import Icon from './Icon.jsx'
 
-// Shared look for the collapsed action triggers (a tinted, tappable chip with a
-// leading icon) and the compact form fields, so the three actions below stay
-// visually consistent. Full static class strings on purpose — Tailwind scans the
-// source as text, so a `bg-${tone}` template would never be generated.
-const CHIP_BASE =
-  'mt-2 inline-flex items-center gap-1.5 self-start rounded-lg px-3 py-2 text-xs font-semibold transition active:scale-[0.97]'
-const CHIP = {
-  olive: `${CHIP_BASE} bg-olive/10 text-olive`,
-  moss: `${CHIP_BASE} bg-moss/12 text-moss`,
-  amber: `${CHIP_BASE} bg-amber/12 text-amber`,
-  terra: `${CHIP_BASE} bg-terra/10 text-terra`,
+// One row of the detail's "Acciones" card: tinted icon tile + label + trailing
+// chevron, full width so the stack reads as a single aligned list (the card
+// container draws the dividers with divide-y). Tones reuse the state-pill
+// palette; full static class strings on purpose — Tailwind scans the source as
+// text, so a `bg-${tone}` template would never be generated.
+const TILE = {
+  olive: 'bg-olive/10 text-olive',
+  moss: 'bg-moss/12 text-moss',
+  amber: 'bg-amber/12 text-amber',
+  terra: 'bg-terra/10 text-terra',
 }
+const ROW_HOVER = {
+  olive: 'hover:bg-olive/5',
+  moss: 'hover:bg-moss/5',
+  amber: 'hover:bg-amber/5',
+  terra: 'hover:bg-terra/5',
+}
+
+// Renders an <a> when `href` is given (the ready PDF download must be a real
+// anchor — see PdfButton), a <button> otherwise.
+export function ActionRow({ icon, tone, label, danger = false, href, download, onClick, disabled }) {
+  const className = `flex w-full items-center gap-3 py-3 text-sm font-semibold transition active:scale-[0.99] disabled:opacity-50 ${ROW_HOVER[tone]}`
+  const body = (
+    <>
+      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${TILE[tone]}`}>
+        <Icon name={icon} className="h-4 w-4" strokeWidth={icon === 'star' ? 0 : 2} />
+      </span>
+      <span className={`flex-1 text-left ${danger ? 'text-terra' : 'text-soil'}`}>{label}</span>
+      <Icon name="chevron-right" className="h-4 w-4 shrink-0 text-ink/40" />
+    </>
+  )
+  if (href) {
+    return (
+      <a href={href} download={download} className={className}>
+        {body}
+      </a>
+    )
+  }
+  return (
+    <button type="button" onClick={onClick} disabled={disabled} className={className}>
+      {body}
+    </button>
+  )
+}
+
 const fieldClass =
   'mt-1 w-full rounded-xl border border-line bg-card px-3 py-2 text-sm text-soil outline-none transition focus:border-olive focus:ring-2 focus:ring-olive/15'
 
@@ -69,22 +103,30 @@ export function PdfButton({ interventionId }) {
 
   if (status === 'ready') {
     return (
-      <a href={url} download="prescripcion.pdf" className={CHIP.olive}>
-        <Icon name="download" className="h-4 w-4" />
-        Descargar prescripción (PDF)
-      </a>
+      <ActionRow
+        icon="download"
+        tone="olive"
+        label="Descargar prescripción (PDF)"
+        href={url}
+        download="prescripcion.pdf"
+      />
     )
   }
 
   return (
-    <button type="button" onClick={prepare} className={CHIP.olive}>
-      <Icon name={status === 'error' ? 'refresh' : 'prescription'} className="h-4 w-4" />
-      {status === 'loading'
-        ? 'Preparando…'
-        : status === 'error'
-          ? 'No se pudo preparar — reintentar'
-          : 'Preparar prescripción (PDF)'}
-    </button>
+    <ActionRow
+      icon={status === 'error' ? 'refresh' : 'prescription'}
+      tone="olive"
+      onClick={prepare}
+      disabled={status === 'loading'}
+      label={
+        status === 'loading'
+          ? 'Preparando…'
+          : status === 'error'
+            ? 'No se pudo preparar — reintentar'
+            : 'Preparar prescripción (PDF)'
+      }
+    />
   )
 }
 
@@ -132,15 +174,18 @@ export function ConfirmExecution({ interventionId, onConfirmed }) {
 
   if (!open) {
     return (
-      <button type="button" onClick={() => setOpen(true)} className={CHIP.moss}>
-        <Icon name="check-circle" className="h-4 w-4" />
-        Confirmar ejecución
-      </button>
+      <ActionRow
+        icon="check-circle"
+        tone="moss"
+        label="Confirmar ejecución"
+        onClick={() => setOpen(true)}
+      />
     )
   }
 
   return (
-    <div className="mt-3 flex flex-col gap-2 border-t border-line pt-3">
+    <div className="flex flex-col gap-2 py-3">
+      <p className="text-sm font-bold text-soil">Confirmar ejecución</p>
       <label className="text-xs font-semibold text-ink">
         Fecha de aplicación
         <input type="date" value={day} onChange={(e) => setDay(e.target.value)} className={fieldClass} />
@@ -211,7 +256,7 @@ export function ConfirmExecution({ interventionId, onConfirmed }) {
           type="button"
           onClick={submit}
           disabled={status === 'saving'}
-          className="rounded-xl bg-moss px-4 py-2 text-xs font-bold text-white shadow-card transition active:scale-[0.97] disabled:opacity-50"
+          className="rounded-xl bg-moss px-4 py-2 text-xs font-bold text-white shadow-card transition hover:brightness-95 active:scale-[0.97] disabled:opacity-50"
         >
           {status === 'saving' ? 'Confirmando…' : 'Confirmar'}
         </button>
@@ -219,7 +264,7 @@ export function ConfirmExecution({ interventionId, onConfirmed }) {
           type="button"
           onClick={() => setOpen(false)}
           disabled={status === 'saving'}
-          className="text-xs font-semibold text-ink"
+          className="text-xs font-semibold text-ink hover:underline"
         >
           Cancelar
         </button>
@@ -228,18 +273,17 @@ export function ConfirmExecution({ interventionId, onConfirmed }) {
   )
 }
 
-// Soft-deletes the record (M8.2) behind a native confirm() — destructive, so
-// the extra tap is deliberate. The backend never removes the row (hard rule 1):
-// it just stops being visible in the app. On success the parent leaves the
+// Soft-deletes the record (M8.2) behind an in-app confirm dialog — destructive,
+// so the extra tap is deliberate. The backend never removes the row (hard rule
+// 1): it just stops being visible in the app. On success the parent leaves the
 // screen, since the record no longer exists for the UI.
 export function DeleteRecord({ interventionId, onDeleted }) {
+  const [confirming, setConfirming] = useState(false)
   const [status, setStatus] = useState('idle') // idle | deleting | error
   const [error, setError] = useState('')
 
   async function remove() {
-    if (!window.confirm('¿Eliminar este registro? Dejará de aparecer en el cuaderno.')) {
-      return
-    }
+    setConfirming(false)
     setStatus('deleting')
     setError('')
     try {
@@ -252,18 +296,25 @@ export function DeleteRecord({ interventionId, onDeleted }) {
   }
 
   return (
-    <>
-      <button
-        type="button"
-        onClick={remove}
+    <div>
+      <ActionRow
+        icon="trash"
+        tone="terra"
+        danger
+        label={status === 'deleting' ? 'Eliminando…' : 'Eliminar registro'}
+        onClick={() => setConfirming(true)}
         disabled={status === 'deleting'}
-        className={`${CHIP.terra} disabled:opacity-50`}
-      >
-        <Icon name="trash" className="h-4 w-4" />
-        {status === 'deleting' ? 'Eliminando…' : 'Eliminar registro'}
-      </button>
-      {status === 'error' && <p className="mt-1 text-xs text-terra">{error}</p>}
-    </>
+      />
+      {status === 'error' && <p className="pb-3 text-xs text-terra">{error}</p>}
+      <ConfirmDialog
+        open={confirming}
+        title="¿Eliminar este registro?"
+        body="Dejará de aparecer en el cuaderno de campo."
+        confirmLabel="Eliminar"
+        onConfirm={remove}
+        onCancel={() => setConfirming(false)}
+      />
+    </div>
   )
 }
 
@@ -319,15 +370,13 @@ export function AssessEffectiveness({ interventionId, onAssessed }) {
 
   if (!open) {
     return (
-      <button type="button" onClick={() => setOpen(true)} className={CHIP.amber}>
-        <Icon name="star" className="h-4 w-4" strokeWidth={0} />
-        Valorar eficacia
-      </button>
+      <ActionRow icon="star" tone="amber" label="Valorar eficacia" onClick={() => setOpen(true)} />
     )
   }
 
   return (
-    <div className="mt-3 flex flex-col gap-2 border-t border-line pt-3">
+    <div className="flex flex-col gap-2 py-3">
+      <p className="text-sm font-bold text-soil">Valorar eficacia</p>
       <span className="text-xs font-semibold text-ink">¿Cómo funcionó el tratamiento?</span>
       <div className="flex gap-2">
         {RATINGS.map((r) => (
@@ -369,7 +418,7 @@ export function AssessEffectiveness({ interventionId, onAssessed }) {
           type="button"
           onClick={submit}
           disabled={status === 'saving'}
-          className="rounded-xl bg-amber px-4 py-2 text-xs font-bold text-white shadow-card transition active:scale-[0.97] disabled:opacity-50"
+          className="rounded-xl bg-amber px-4 py-2 text-xs font-bold text-white shadow-card transition hover:brightness-95 active:scale-[0.97] disabled:opacity-50"
         >
           {status === 'saving' ? 'Guardando…' : 'Guardar valoración'}
         </button>
@@ -377,7 +426,7 @@ export function AssessEffectiveness({ interventionId, onAssessed }) {
           type="button"
           onClick={() => setOpen(false)}
           disabled={status === 'saving'}
-          className="text-xs font-semibold text-ink"
+          className="text-xs font-semibold text-ink hover:underline"
         >
           Cancelar
         </button>

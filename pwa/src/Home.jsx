@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from './supabase.js'
 import { deletePending, listPending } from './pendingTakes.js'
 import AppBar, { BarButton } from './AppBar.jsx'
+import ConfirmDialog from './ConfirmDialog.jsx'
 import Icon from './Icon.jsx'
 import PendingList from './PendingList.jsx'
 import Recorder from './Recorder.jsx'
@@ -41,12 +42,14 @@ function Home() {
     mainRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-  async function discardPending(take) {
-    // Destructive for the audio (though never a legal record — it was never
-    // persisted), so ask first, like the record delete does.
-    if (!window.confirm('¿Descartar esta grabación pendiente? El audio se perderá.')) {
-      return
-    }
+  // Destructive for the audio (though never a legal record — it was never
+  // persisted), so ask first via the in-app dialog: the take waits here until
+  // the advisor confirms or cancels.
+  const [takeToDiscard, setTakeToDiscard] = useState(null)
+
+  async function discardPending() {
+    const take = takeToDiscard
+    setTakeToDiscard(null)
     try {
       await deletePending(take.transactionId)
     } catch (err) {
@@ -58,7 +61,7 @@ function Home() {
   return (
     <div className="flex min-h-dvh flex-col bg-bone text-soil">
       <AppBar
-        title="Agrovoz"
+        title="AgroVoz"
         subtitle="Cuaderno de campo por voz"
         actions={
           <>
@@ -82,7 +85,7 @@ function Home() {
           />
         </section>
 
-        <PendingList takes={pendingTakes} onRetry={retryPending} onDiscard={discardPending} />
+        <PendingList takes={pendingTakes} onRetry={retryPending} onDiscard={setTakeToDiscard} />
 
         <section className="mx-auto mt-10 w-full max-w-md pb-8">
           <div className="mb-1 flex items-center justify-between">
@@ -90,7 +93,7 @@ function Home() {
             <button
               type="button"
               onClick={() => navigate('/historial')}
-              className="inline-flex items-center gap-1 text-xs font-semibold text-olive transition active:scale-[0.97]"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-olive/10 px-3 py-1.5 text-xs font-semibold text-olive transition hover:bg-olive/20 active:scale-[0.97]"
             >
               <Icon name="calendar" className="h-4 w-4" />
               Historial
@@ -99,6 +102,15 @@ function Home() {
           <TodayList refreshKey={refreshKey} />
         </section>
       </main>
+
+      <ConfirmDialog
+        open={takeToDiscard !== null}
+        title="¿Descartar esta grabación?"
+        body="El audio pendiente se perderá y no se podrá recuperar."
+        confirmLabel="Descartar"
+        onConfirm={discardPending}
+        onCancel={() => setTakeToDiscard(null)}
+      />
     </div>
   )
 }

@@ -67,7 +67,7 @@ function RecordCard({ record: r }) {
           navigate(`/registro/${r.id}`)
         }
       }}
-      className="cursor-pointer rounded-2xl border border-line bg-card p-4 shadow-card transition active:scale-[0.99]"
+      className="cursor-pointer rounded-2xl border border-line bg-card p-4 shadow-card transition hover:border-olive/40 active:scale-[0.99]"
     >
       <div className="flex items-center justify-between">
         <span

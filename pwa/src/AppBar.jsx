@@ -18,7 +18,7 @@ function AppBar({ title, subtitle, onBack, actions }) {
             type="button"
             onClick={onBack}
             aria-label="Volver"
-            className="-ml-1.5 flex h-9 w-9 items-center justify-center rounded-full transition active:scale-90 active:bg-white/10"
+            className="-ml-1.5 flex h-9 w-9 items-center justify-center rounded-full transition hover:bg-white/10 active:scale-90 active:bg-white/10"
           >
             <Icon name="chevron-left" className="h-6 w-6" />
           </button>
@@ -48,7 +48,7 @@ export function BarButton({ icon, title, onClick }) {
       onClick={onClick}
       title={title}
       aria-label={title}
-      className="flex h-9 w-9 items-center justify-center rounded-full text-white/85 transition active:scale-90 active:bg-white/10"
+      className="flex h-9 w-9 items-center justify-center rounded-full text-white/85 transition hover:bg-white/10 active:scale-90 active:bg-white/10"
     >
       <Icon name={icon} className="h-[18px] w-[18px]" />
     </button>

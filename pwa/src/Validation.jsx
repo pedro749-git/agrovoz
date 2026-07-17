@@ -74,7 +74,7 @@ function Validation() {
             <button
               type="button"
               onClick={refresh}
-              className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-olive"
+              className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-olive hover:underline"
             >
               <Icon name="refresh" className="h-4 w-4" />
               Reintentar
@@ -181,7 +181,7 @@ function Slot({ holdingId, campaign, type, validation, onSigned }) {
     return (
       <div className="border-t border-line pt-2 first:border-t-0 first:pt-0">
         <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold text-ink">{type.label}</span>
+          <span className="text-xs font-semibold text-ink hover:underline">{type.label}</span>
           <span
             className={`inline-flex items-center gap-1 text-xs font-bold ${
               validation.conformity ? 'text-moss' : 'text-terra'
@@ -248,7 +248,7 @@ function SignForm({ holdingId, campaign, type, onSigned }) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1.5 self-start rounded-lg bg-olive/10 px-3 py-2 text-xs font-semibold text-olive transition active:scale-[0.97]"
+        className="inline-flex items-center gap-1.5 self-start rounded-lg bg-olive/10 px-3 py-2 text-xs font-semibold text-olive transition hover:bg-olive/20 active:scale-[0.97]"
       >
         <Icon name="pen" className="h-4 w-4" />
         Firmar {type.label.toLowerCase()}
@@ -258,7 +258,7 @@ function SignForm({ holdingId, campaign, type, onSigned }) {
 
   return (
     <div className="flex flex-col gap-2 border-t border-line pt-2">
-      <span className="text-xs font-semibold text-ink">
+      <span className="text-xs font-semibold text-ink hover:underline">
         Firmar validación «{type.label}»
       </span>
       <div className="flex gap-2">
@@ -271,7 +271,7 @@ function SignForm({ holdingId, campaign, type, onSigned }) {
             type="button"
             onClick={() => setConformity(c.value)}
             className={`flex-1 rounded-xl py-2 text-xs font-bold transition ${
-              conformity === c.value ? `${c.className} text-white` : 'border border-line text-ink'
+              conformity === c.value ? `${c.className} text-white` : 'border border-line text-ink hover:bg-olive/5'
             }`}
           >
             {c.label}
@@ -297,7 +297,7 @@ function SignForm({ holdingId, campaign, type, onSigned }) {
           type="button"
           onClick={submit}
           disabled={status === 'saving'}
-          className="inline-flex items-center gap-1.5 rounded-xl bg-olive px-4 py-2 text-xs font-bold text-white shadow-card transition active:scale-[0.97] disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 rounded-xl bg-olive px-4 py-2 text-xs font-bold text-white shadow-card transition hover:bg-olive-d active:scale-[0.97] disabled:opacity-50"
         >
           <Icon name="pen" className="h-3.5 w-3.5" />
           {status === 'saving' ? 'Firmando…' : 'Firmar y generar PDF'}
@@ -306,7 +306,7 @@ function SignForm({ holdingId, campaign, type, onSigned }) {
           type="button"
           onClick={() => setOpen(false)}
           disabled={status === 'saving'}
-          className="text-xs font-semibold text-ink"
+          className="text-xs font-semibold text-ink hover:underline"
         >
           Cancelar
         </button>
@@ -357,7 +357,7 @@ function ValidationPdf({ validationId }) {
     <button
       type="button"
       onClick={prepare}
-      className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-olive/10 px-3 py-1.5 text-xs font-semibold text-olive transition active:scale-[0.97]"
+      className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-olive/10 px-3 py-1.5 text-xs font-semibold text-olive transition hover:bg-olive/20 active:scale-[0.97]"
     >
       <Icon name={status === 'error' ? 'refresh' : 'download'} className="h-4 w-4" />
       {status === 'loading'

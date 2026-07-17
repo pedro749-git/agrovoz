@@ -95,7 +95,7 @@ function History() {
                 className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
                   activePreset === p.key
                     ? 'bg-olive text-white'
-                    : 'bg-olive/10 text-olive active:scale-[0.97]'
+                    : 'bg-olive/10 text-olive hover:bg-olive/20 active:scale-[0.97]'
                 }`}
               >
                 {p.label}
@@ -144,7 +144,7 @@ function History() {
                 setStatus('loading')
                 setAttempt((a) => a + 1)
               }}
-              className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-olive"
+              className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-olive hover:underline"
             >
               <Icon name="refresh" className="h-4 w-4" />
               Reintentar

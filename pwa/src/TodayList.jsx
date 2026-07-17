@@ -65,7 +65,7 @@ function TodayList({ refreshKey }) {
         <button
           type="button"
           onClick={retry}
-          className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-olive"
+          className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-olive hover:underline"
         >
           <Icon name="refresh" className="h-4 w-4" />
           Reintentar
@@ -80,10 +80,7 @@ function TodayList({ refreshKey }) {
     // it and sees the whole pipeline work without anyone explaining anything.
     return (
       <div className="mt-8 flex flex-col items-center text-center">
-        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-olive/10 text-olive">
-          <Icon name="leaf" className="h-7 w-7" />
-        </div>
-        <p className="mt-3 max-w-[15rem] text-sm text-ink">
+        <p className="max-w-[15rem] text-sm text-ink">
           Aún no hay registros hoy. Pulsa el micrófono y prueba a dictar:
         </p>
         {/* Verbatim the first few-shot example in prompts/extraction_v1.md, so

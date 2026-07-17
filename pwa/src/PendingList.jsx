@@ -36,7 +36,7 @@ function PendingCard({ take, onRetry, onDiscard }) {
         <button
           type="button"
           onClick={onDiscard}
-          className="inline-flex items-center gap-1 text-xs font-semibold text-terra"
+          className="inline-flex items-center gap-1 text-xs font-semibold text-terra hover:underline"
         >
           <Icon name="trash" className="h-3.5 w-3.5" />
           Descartar

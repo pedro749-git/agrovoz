@@ -250,7 +250,7 @@ function Recorder({ onSaved, restoreRef, onPendingChange }) {
           type="button"
           onClick={isRecording ? stopRecording : startRecording}
           disabled={status === 'previewing' || status === 'committing'}
-          className={`relative flex h-40 w-40 flex-col items-center justify-center rounded-full text-white shadow-float ring-4 ring-white/70 transition active:scale-95 disabled:opacity-60 ${
+          className={`relative flex h-40 w-40 flex-col items-center justify-center rounded-full text-white shadow-float ring-4 ring-white/70 transition hover:brightness-95 active:scale-95 disabled:opacity-60 ${
             isRecording ? 'bg-terra' : 'bg-gradient-to-b from-olive to-olive-d'
           }`}
         >
@@ -265,12 +265,15 @@ function Recorder({ onSaved, restoreRef, onPendingChange }) {
         </button>
       </div>
 
-      {/* Hint text under the button. */}
-      <p className="mt-6 max-w-[15rem] text-center text-sm leading-relaxed text-ink">
-        {isRecording
-          ? 'Pulsa de nuevo para terminar la grabación.'
-          : 'Dicta una observación o una prescripción. El sistema reconoce cuál es.'}
-      </p>
+      {/* Hint only while recording: stopping is the non-obvious gesture (same
+          button). Idle needs no caption — the button says REGISTRAR and the
+          empty today-list already teaches what to dictate; a permanent line
+          here just crowded the screen. */}
+      {isRecording && (
+        <p className="mt-6 max-w-[15rem] text-center text-sm leading-relaxed text-ink">
+          Pulsa de nuevo para terminar la grabación.
+        </p>
+      )}
 
       {/* Saved confirmation (clears the preview). */}
       {status === 'done' && (
@@ -324,7 +327,7 @@ function Recorder({ onSaved, restoreRef, onPendingChange }) {
               type="button"
               onClick={discard}
               disabled={status === 'previewing'}
-              className="text-xs font-semibold text-ink"
+              className="text-xs font-semibold text-ink hover:underline"
             >
               Descartar
             </button>

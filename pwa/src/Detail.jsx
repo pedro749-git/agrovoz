@@ -4,6 +4,7 @@ import { getIntervention } from './api.js'
 import AppBar from './AppBar.jsx'
 import Icon from './Icon.jsx'
 import {
+  ActionRow,
   AssessEffectiveness,
   ConfirmExecution,
   DeleteRecord,
@@ -309,10 +310,17 @@ function Detail() {
               </Section>
             )}
 
-            {/* Actions live here now (moved off the list row). The PDF download
+            {/* Actions live here now (moved off the list row): the PDF download
                 for prescriptions, confirming a prescription's execution, and the
-                M8.2 correction/deletion. */}
-            <div className="mt-6 flex flex-col border-t border-line pt-3">
+                M8.2 correction/deletion. Styled as one more section — a card of
+                full-width ActionRows — so they match the screen instead of a
+                loose pile of tinted chips; divide-y draws the row separators
+                (each action component renders a single root, collapsed or
+                expanded, so the dividers always land between actions). */}
+            <h3 className="mt-5 mb-2 text-[10px] font-bold uppercase tracking-[0.14em] text-ink">
+              Acciones
+            </h3>
+            <div className="divide-y divide-line rounded-2xl border border-line bg-card px-4 shadow-card">
               {r.has_pdf && <PdfButton interventionId={r.id} />}
               {r.lifecycle_state === 'PRESCRIBED' && (
                 <ConfirmExecution
@@ -337,14 +345,12 @@ function Detail() {
                   the legal data is preserved either way. */}
               {(r.lifecycle_state === 'OBSERVATION' ||
                 r.lifecycle_state === 'PRESCRIBED') && (
-                <button
-                  type="button"
+                <ActionRow
+                  icon="pen"
+                  tone="olive"
+                  label="Corregir registro"
                   onClick={() => navigate(`/registro/${r.id}/corregir`)}
-                  className="mt-2 inline-flex items-center gap-1.5 self-start rounded-lg bg-olive/10 px-3 py-2 text-xs font-semibold text-olive transition active:scale-[0.97]"
-                >
-                  <Icon name="pen" className="h-4 w-4" />
-                  Corregir registro
-                </button>
+                />
               )}
               <DeleteRecord
                 interventionId={r.id}

@@ -60,7 +60,7 @@ function Dictate({ onTranscribed, label = 'Dictar', className = '' }) {
       className={`${base} ${
         state === 'recording'
           ? 'animate-pulse bg-terra/10 text-terra'
-          : 'bg-olive/10 text-olive disabled:opacity-50'
+          : 'bg-olive/10 text-olive hover:bg-olive/20 disabled:opacity-50'
       } ${className}`}
     >
       <Icon name={state === 'recording' ? 'stop' : 'mic'} className="h-4 w-4" />
