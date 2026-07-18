@@ -11,7 +11,7 @@ class Extractor(ABC):
     The LLM output is untrusted (hard rule 4): implementations must parse
     the provider's JSON through the ExtractedFields Pydantic model — that
     validation is the port's contract, not an extra. Implementations
-    (today: Qwen Instruct via DashScope) raise ExtractionError on provider
+    (today: qwen-flash via DashScope) raise ExtractionError on provider
     failure or on JSON that does not validate.
     """
 

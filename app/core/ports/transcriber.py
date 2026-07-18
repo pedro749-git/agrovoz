@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 class Transcriber(ABC):
     """Turns the dictated audio into raw Spanish text.
 
-    Implementations (today: Qwen-Audio via DashScope) must raise
+    Implementations (today: qwen3-asr-flash via DashScope) must raise
     TranscriptionError on provider failure — never a vendor exception.
     """
 

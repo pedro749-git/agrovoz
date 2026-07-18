@@ -1,4 +1,4 @@
-# CLAUDE.md — GIP Advisor (TFG / internship / Alibaba hackathon)
+# CLAUDE.md — AgroVoz (GIP Advisor · TFG / internship / Alibaba hackathon)
 
 ## What this project is
 
@@ -6,20 +6,23 @@ Voice middleware for GIP advisors (Gestión Integrada de Plagas — Integrated
 Pest Management) in Spain. The advisor dictates a short audio in the field
 ("Finca de Pepe, Abamectina 1.5 litros por hectárea, araña roja, tractor")
 and the system produces the legally valid phytosanitary record: transcription
-(Qwen-Audio) → field extraction to JSON (Qwen Instruct) → legal validation →
+(Qwen3-ASR-Flash) → field extraction to JSON (Qwen-Flash) → legal validation →
 PostgreSQL → official PDF.
 
-Legal context: Spanish RD 1311/2012 (Annex III) and EU Regulation 2023/564.
+Legal context: Spanish RD 1311/2012 (Annex III) and Commission Implementing
+Regulation (EU) 2023/564 (as amended by EU 2025/2203 + RD 1039/2025).
 Electronic phytosanitary records become mandatory in Spain on 2027-01-01.
 
-**Full specification lives in `docs/mvp_asesor_gip_v3.md` (in Spanish — the
-domain is Spanish-regulatory). It is a map, not a contract: consult it when
-needed, never implement it wholesale.**
+**The original full specification (Spanish, `mvp_asesor_gip_v3.md`) was
+distilled into `docs/ABOUT.md` (English) for the hackathon and removed from
+the tree — recover it from git history if ever needed. ABOUT.md is a map,
+not a contract: consult when needed, never implement wholesale.**
 
 ## Methodology — READ BEFORE PROPOSING ANYTHING
 
-Solo project (3rd-year CS student) built in incremental milestones. Golden
-rule: **each milestone must work end-to-end before starting the next.**
+Solo project — a 3rd-year CS student's bachelor's thesis (TFG) — built in
+incremental milestones. Golden rule: **each milestone must work end-to-end
+before starting the next.**
 
 - [x] M1 — SPIKE (throwaway, single file, NO architecture): audio in →
       extracted JSON printed to console. Goal: validate that Qwen understands a
@@ -50,6 +53,11 @@ continues the same numbering as a post-MVP hardening phase (M8+).
             rules 1/7); PWA Corregir/Eliminar on the detail (verified on a phone)
       - [x] M8.3 — Two-phase PWA record flow (record → review → confirm), with
             per-field ✓/⚠️ resolution markers + plot crop/SIGPAC (verified on a phone)
+- [x] Hardening (pre-hackathon, unnumbered): offline pending queue (manual
+      retry from "Pendientes", original device timestamp + idempotency key
+      reused) · unit-aware dose validation (dictated dose converted to the
+      catalog's unit; prompt bumped to v2) · history screen with date-range
+      filter (`?from=&to=`) · PWA visual polish (icons, app bar, brand)
 
 **Update this checklist when a milestone is completed.** If the user asks for
 something from a future milestone, point it out and ask before implementing.
@@ -76,15 +84,18 @@ app/
     ports/       transcriber.py · extractor.py · repository.py
                  storage.py · weather.py · pdf_generator.py  (ABCs, added on demand)
     services/    registration_pipeline.py · execution_service.py
+                 assessment_service.py · campaign_validation_service.py
+                 correction_service.py · onboarding_service.py
                  validation_service.py
   adapters/
     inbound/     api.py (FastAPI)
     outbound/    qwen.py (audio+instruct; split on demand) · supabase_repo.py
-                 oss_storage.py · aemet_weather.py · reportlab_pdf.py
+                 oss_storage.py · open_meteo_weather.py · reportlab_pdf.py
   config/        settings.py (pydantic-settings) · container.py · .env(.example)
 pwa/             (M4+) React + Vite + Tailwind + vite-plugin-pwa
-prompts/         extraction_v1.md  (few-shot examples; version bump on change)
-docs/            mvp_asesor_gip_v3.md · decisions.md · historico/ (M1 spike)
+prompts/         extraction_v1.md · extraction_v2.md (current; version bump on change)
+docs/            ABOUT.md · ARCHITECTURE.md · SETUP.md · DEMO.md ·
+                 USER_GUIDE.md · decisions.md · historico/ (M1 spike)
 ```
 
 ## Language convention
@@ -110,8 +121,8 @@ docs/            mvp_asesor_gip_v3.md · decisions.md · historico/ (M1 spike)
 - Supabase (PostgreSQL + Auth by email OTP code / password — magic link dropped
   for iPhone PWA compat; verify JWT via asymmetric signing keys / JWKS endpoint
   from M4 — not the legacy shared HS256 secret).
-- Qwen-Audio (speech→text) + Qwen Instruct (text→JSON) via DashScope.
-- Alibaba Cloud OSS (audio + PDFs), ReportLab (PDFs), AEMET OpenData (weather).
+- Qwen3-ASR-Flash (speech→text) + Qwen-Flash (text→JSON) via DashScope.
+- Alibaba Cloud OSS (audio + PDFs), ReportLab (PDFs), Open-Meteo (weather).
 - Deployment target: Alibaba Cloud ECS (hackathon requirement).
 
 ```bash
@@ -132,16 +143,18 @@ cp app/config/.env.example app/config/.env    # fill keys manually, never commit
    model `ExtractedFields` before touching the DB. Missing mandatory field →
    HTTP 422 with a clear Spanish message; never invent values.
 5. **Legal validation before persisting:** product authorized · dose ≤
-   `max_allowed_dose` · treated area ≤ `enclosure_area_ha`.
+   `max_allowed_dose` **after converting the dictated unit to the catalog's**
+   (unknown or incomparable units are blocked, never guessed) · treated
+   area ≤ `enclosure_area_ha`.
 6. **Records belong to the HOLDING** (owner, NIF, REA/REGEPA number), not to
    the advisor. Chain: advisors → holdings → plots.
 7. **State machine (M5+):** OBSERVATION (terminal) · PRESCRIBED → EXECUTED →
    ASSESSED. No backward transitions; corrections = new intervention +
    soft-delete of the old one.
-8. **AEMET weather is captured when EXECUTION is confirmed** (real application
+8. **Weather is captured when EXECUTION is confirmed** (real application
    date — use historical data if deferred), not when the prescription is
-   recorded. If AEMET fails: save anyway with `audit_state='WEATHER_PENDING'`;
-   never block the advisor.
+   recorded. If the weather provider fails: save anyway with
+   `audit_state='WEATHER_PENDING'`; never block the advisor.
 9. UTC in the database; render `Europe/Madrid` only in PDFs.
 10. DO NOT EVER READ .env. Secrets only in `config/.env` (gitignored). `.env.example` has empty values. 
 
@@ -169,14 +182,16 @@ cp app/config/.env.example app/config/.env    # fill keys manually, never commit
   `{"error": "DOSE_ERROR", "mensaje": "<Spanish, readable by an agronomist>"}`.
 - Commits in English, imperative, milestone-tagged:
   `[M1] add field extraction with Qwen Instruct`.
-- The extraction prompt lives in `prompts/extraction_v1.md` (few-shot
-  examples in Spanish — that's what the model will hear); every change bumps
-  the version (`prompt_version` column).
+- The extraction prompt lives in `prompts/` (few-shot examples in Spanish —
+  that's what the model will hear); every change bumps the version
+  (`prompt_version` column; current: `extraction_v2.md`).
 
 ## Decision context
 
 This is a TFG (bachelor's thesis): when two options exist, prefer (1) code the
 student can fully understand — explain the why of non-trivial choices — and
 (2) the simple thing that works today over the elegant thing for tomorrow.
-Log every decision (taken AND discarded) in `docs/decisions.md`, one line
-each: what, why, date. That file becomes the thesis' design chapter.
+Log every decision (taken AND discarded) in `docs/decisions.md`, one entry
+each: what, why, discarded alternatives, date. Newest first — new entries go
+at the top, under a `## date — title` header. That file becomes the thesis'
+design chapter.

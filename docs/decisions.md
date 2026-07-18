@@ -1,7 +1,205 @@
 # Design decisions log
 
-One line per decision (taken AND discarded): what · why · date.
-This file becomes the thesis' design chapter.
+One entry per decision (taken AND discarded): what · why · discarded
+alternatives · date. Newest first — new entries go at the top. This file
+becomes the thesis' design chapter.
+
+## 2026-07-18 — Docs reorganization + audits for the hackathon
+
+- Docs reorganized for the hackathon: README rewritten judge-first (hook,
+  live-demo + hero-GIF placeholders, Mermaid pipeline, compressed milestone
+  table) with the detail split into docs/ARCHITECTURE.md (diagrams, hard
+  rules, API surface), docs/SETUP.md (install/run/tests, moved out of the
+  README) and docs/DEMO.md (video script + screen walkthrough with 📸
+  placeholders in docs/img/) · project renamed AgroVoz across docs to match
+  the Devpost/PWA brand · 2026-07-18
+- funcionabilidad.md replaced by docs/USER_GUIDE.md (English): every flow
+  with Spanish dictation phrases (grounded in prompts/extraction_v2.md) and
+  the full outcome matrix per flow · outdated claims dropped rather than
+  translated — AEMET (now Open-Meteo), auto-sync on reconnect (queue retry is
+  deliberately manual), weather on observations (hard rule 8: execution
+  only), and the plots/map screens that were never built · 2026-07-18
+- mvp_asesor_gip_v3.md merged with devpost_about.md into docs/ABOUT.md
+  (English): part 1 = the Devpost story verbatim (still copy-pasteable into
+  the form), part 2 = the spec's idea/regulatory content distilled (advisor's
+  year, regulatory clock, law-as-data-model checklist, scope) · the spec's
+  implementation sections (SQL, code, endpoints, screens, milestone plan)
+  were dropped, they live in supabase/, ARCHITECTURE.md, USER_GUIDE.md and
+  the README · original Spanish spec archived at docs/historico/ (TFG
+  material, same pattern as the M1 spike); CLAUDE.md pointers updated ·
+  2026-07-18
+- Archived Spanish spec deleted from docs/historico (git history keeps it);
+  Supabase migration comments cleaned for the public repo: initial migration
+  translated to English, SQL-Editor box header / "changes vs original" block /
+  stray terminal escape codes removed, AEMET mentions generalized to the
+  weather provider; M6/M8.2 migrations were already in English · 2026-07-18
+- Docs audit for the hackathon: SETUP test table completed (correction/
+  reportlab tests were missing) · ARCHITECTURE gained correction_service +
+  onboarding_service (diagram and layout) and the state diagram now shows the
+  direct-EXECUTION entry with GitHub-safe labels (no <br/> in stateDiagram
+  transitions) · CLAUDE.md realigned with reality: AgroVoz in the title,
+  Open-Meteo instead of AEMET (stack, hard rule 8, adapter filename in the
+  layout), services list completed, prompt pointer now v2 · sample PDFs are
+  gitignored, so they are NOT linked from the README (discarded idea) ·
+  full test suite green after the comment-only code touches (114 passed) ·
+  2026-07-18
+- External-audit fixes (second docs pass): USER_GUIDE's direct-execution
+  example no longer uses Clorpirifos (EU approval withdrawn in 2020, and
+  authorized=FALSE in the seed catalog — it would be blocked by our own
+  validator); Clorpirifos is now deliberately the PRODUCT_ERROR example ·
+  2023/564 and 2025/2203 named as Commission Implementing Regulations in
+  ABOUT part 2, and part 1 says "as amended" for the 2027 date · identity
+  unified everywhere as "3rd-year CS student's bachelor's thesis (TFG)" ·
+  SETUP gained the missing schema step (supabase link + db push, or SQL
+  Editor paste) · DEMO take 7 (offline queue) no longer optional · Devpost
+  "we" headings kept as-is: they are Devpost's fixed form-section names,
+  the body already speaks in first person singular · 2026-07-18
+- Third docs pass (decisions.md + CLAUDE.md audit): decisions.md header now
+  promises "one entry per decision" (the real, richer format) instead of one
+  line, same fix in CLAUDE.md's Decision context · the 2026-06-30 "M5 step
+  4a" section moved above the 06-29 sections to restore reverse-chronological
+  order in the top zone · README no longer labels decisions.md as Spanish
+  (it is English) · CLAUDE.md realigned: hardening phase added to the
+  milestone checklist, hard rule 5 now states the unit conversion, the legal
+  line carries the full amendment chain (2023/564 as amended by 2025/2203 +
+  RD 1039/2025), identity unified as "3rd-year CS student's bachelor's
+  thesis (TFG)" · KNOWN GAP, deliberately not fixed today: the file has two
+  ordering zones (old top zone newest-first; entries since ~2026-07-06
+  appended at the bottom oldest-first) — normalizing 1300 lines of thesis
+  material deserves its own careful pass · 2026-07-18
+- decisions.md normalized to one reverse-chronological convention (it had
+  two zones: the original newest-first sections on top, and sessions since
+  ~2026-07-06 appended oldest-first at the bottom) · loose session bullets
+  grouped under dated "## date — title" headers, bullet text untouched
+  (verified by line-multiset comparison) · header and CLAUDE.md now state
+  the order (newest first) so future sessions prepend instead of appending ·
+  2026-07-18
+
+## 2026-07-17 — Pre-hackathon polish session (RGPD, brand, PWA)
+
+- Signup code-step copy made generic ("Introdúcelo para continuar: crearemos
+  tu cuenta o, si tu correo ya tenía una, iniciaremos sesión con ella", button
+  "Continuar") · Supabase's signInWithOtp(shouldCreateUser) silently sends a
+  plain LOGIN code when the email already has an account, so the old "Crear
+  cuenta y entrar" copy lied to returning users, who ended inside their old
+  account believing they had created a new one · DISCARDED detecting the case:
+  (a) pre-send probe with shouldCreateUser:false lets anyone enumerate
+  registered emails from the signup form (the very leak the password login
+  avoids) and clashes with the single-use Turnstile token, which the
+  retry-with-create call would burn twice; (b) post-verify `created:false`
+  flag from /api/bootstrap + notice screen warns too late and adds a backend
+  field + an App screen for a TEMPORARY hackathon flow — honest copy that
+  covers both cases costs two strings and zero code · 2026-07-17
+- RGPD privacy notice added (static /privacidad page + "Al continuar aceptas
+  la política de privacidad" line under the login/signup card) · the app
+  handles real personal data (email, voice audio sent to DashScope, third-party
+  names/NIF/ROPO inside records) and its whole pitch is legal compliance, so
+  shipping with zero RGPD surface was incoherent · the notice is
+  prototype-honest: names the real processors (Supabase, Alibaba Cloud OSS +
+  DashScope with possible non-EEA transfer, AEMET/Open-Meteo coordinates only),
+  legal bases 6.1.b (service) and 6.1.c (RD 1311/2012 3-year retention — which
+  is why deletion is soft, tying hard rule 1 to art. 17's legal-obligation
+  limit), and warns not to enter real third-party data in a demo · DISCARDED
+  for now: consent checkbox (friction for judges — the inline line suffices for
+  a demo; a real deployment would add it), cookie banner (only strictly
+  necessary storage: session + offline queue), formal RGPD paperwork (RAT,
+  processor DPAs, transfer impact assessment — for when there is a real user) ·
+  route is public in both router branches so the logged-out login screen can
+  link it · 2026-07-17
+- Desktop polish pass on the PWA · brand casing unified as "AgroVoz" (AppBar,
+  login, manifest, privacy page) · every interactive element got a hover state
+  with one consistent language per kind — solid olive buttons darken
+  (hover:bg-olive-d), tinted chips deepen their tint (/10→/20), plain text
+  links underline, AppBar icon buttons gain the same soft white wash their
+  active state uses, record cards tint their border — because the demo is also
+  judged on desktop, where only 4 of 15 components had any pointer feedback ·
+  dropped the decorative leaf marks on the login card and the empty today-list
+  (the AppBar already carries the brand; the empty state's job is the example
+  phrase, not decoration) · "Historial" link restyled as a tinted chip, same
+  recipe as the detail screen's action chips · 2026-07-17
+- Login turned into a cover page: AppBar removed there and replaced by a brand
+  block — a spoken-word waveform (7 uneven bars, olive opacity ramp fading at
+  the edges; uneven on purpose, real speech is not a symmetric equalizer) over
+  a big "AgroVoz" wordmark ("Voz" in the olive gradient) and the tagline · the
+  leaf mark's removal had left the screen bare, and keeping the AppBar would
+  have printed the brand twice on one screen; the waveform ties the mark to
+  the product's core gesture (dictating) instead of generic agro imagery ·
+  2026-07-17
+- Detail-screen actions restyled from a pile of tinted chips (each its own
+  width/colour, ragged left) into an "Acciones" section matching the screen's
+  card language: one bg-card rounded-2xl card of full-width ActionRow rows
+  (tinted icon tile in the action's semantic tone + soil label + chevron,
+  delete in terra), dividers via divide-y — which works because every action
+  component renders a single root whether collapsed or expanded, so the
+  expanding confirm/assess forms open inside the card under their own bold
+  title · discarded a solid primary CTA + secondary links (hierarchizes
+  actions that are peers) and merely equal-width chips (still a foreign colour
+  block on that screen) · 2026-07-17
+- Removed the permanent hint under the record button ("Dicta una observación o
+  una prescripción…") · it duplicated what the button (REGISTRAR + mic) and
+  the empty today-list's example phrase already teach, overloading the home
+  with text · the recording-state hint ("Pulsa de nuevo para terminar") stays:
+  it only shows mid-action and teaches the one non-obvious gesture, that the
+  same button stops · 2026-07-17
+- Replaced the app icon/favicon — it was still Vite's template purple bolt
+  (favicon.svg + both manifest PNGs), i.e. a foreign brand on the browser tab
+  and the installed-app icon · new mark = the login's waveform on the olive
+  gradient: favicon.svg hand-written, PNGs (192/512) drawn with Pillow
+  full-bleed with the bars inside the maskable safe zone so one file serves
+  the `any` and `maskable` purposes · already-installed PWAs keep the old
+  icon until reinstalled · 2026-07-17
+- Replaced the two window.confirm() dialogs (discard pending take, delete
+  record) with an in-app ConfirmDialog (backdrop + card in the app's visual
+  language, terra confirm button) · the native dialog broke the demo's look
+  and leaks the site URL in its title; the two-step guarantee for destructive
+  actions is unchanged — the action only runs from the dialog's confirm ·
+  2026-07-17
+- ReviewForm gained the execution-only fields (caldo, aplicador, ROPO del
+  aplicador), shown only when record_type is EXECUTION · they existed in
+  ExtractedFields and rode along uneditable, so a directly-dictated execution
+  (or a correction switched to Ejecución) could not fix a mis-heard operator
+  or spray volume in review — FLUJO B's confirm form covered only the
+  prescription→execution path · same labels as that form; backend unchanged
+  (fields were already optional in the schema) · 2026-07-17
+
+## 2026-07-15 — Pre-hackathon hardening: offline queue, unit-aware doses, list names
+
+- Offline pending queue (manual retry) in the PWA · the M4 "offline queue" idea,
+  finally built minimal for the hackathon: when preview/commit cannot reach the
+  server (fetch TypeError / navigator.onLine false — an HTTP 422 is NOT queued,
+  the server answered), the take (blob + transactionId + deviceTimestamp, the
+  exact trio hard rules 2/3 demand a retry to reuse) is parked in IndexedDB
+  (`pendingTakes.js`, hand-rolled ~70-line wrapper, no new dependency) and Home
+  shows a "Pendientes de sincronizar" section with per-take playback, Reintentar
+  (feeds the take back into the Recorder via useImperativeHandle — an event, not
+  a prop — and replays the normal M8 preview → review → commit flow) and
+  Descartar (confirm dialog; legal because a pending take never reached the
+  server, so it was never a record) · retry is MANUAL, not Background Sync:
+  the API doesn't exist on iOS Safari (the reference device) and auto-sync
+  would have to skip the M8 human review · IndexedDB here is best-effort
+  storage (Safari may evict after ~7 days idle): a same-day sync buffer, not
+  an archive — accepted · 2026-07-15
+- Dose validation made unit-aware (bug: it compared raw numbers, so 0.5 hl/ha
+  slipped past a 1.5 L/ha max) · two layers: prompt v2 gives Qwen the canonical
+  unit vocabulary and forbids converting magnitudes (a conversion mistake by the
+  LLM would silently write an illegal record — rule 4), while the backend keeps
+  the guarantee: `validation_service` normalizes both units (synonyms table +
+  hl/ml/cc/g factors, physical constants — no DB column), converts the dictated
+  dose to the catalog's unit and compares there · unknown units and incomparable
+  denominators (/hl spray concentration vs /ha surface — needs the spray volume)
+  are BLOCKED with a Spanish DoseError asking for the catalog's unit: the app
+  never certifies what it cannot check, never guesses · rejected alternative:
+  prompt-only fix (LLM output is untrusted, and the advisor can hand-edit the
+  unit in the review form) · 2026-07-15
+- List cards enriched with the names the advisor recognises (product trade
+  name, plot alias, holding owner) · the intervention row only stores the MAPA
+  number + ids, and resolving names like the detail endpoint does (4 reads per
+  record) would be N+1 over a 500-row history · chosen: three BATCH lookups over
+  the distinct ids (`list_plots_by_ids` / `list_holdings_by_ids` /
+  `list_products_by_registration_numbers`, PostgREST `.in_()`), so the whole
+  list costs 3 extra queries regardless of size; missing rows degrade to null
+  names, never break the list · the PWA card shows the trade name (MAPA number
+  as fallback) and a "Finca de Pepe · José Ruiz" context line · 2026-07-15
 
 ## 2026-07-13 — M8.2 — soft-delete + correction by supersede (hard rules 1/7)
 
@@ -55,6 +253,17 @@ This file becomes the thesis' design chapter.
   also joins the product row (trade_name) because the record stores only the MAPA
   number while commit resolves the product BY name — shown on the detail too
   ("Producto: Abamectina" above the MAPA number).
+
+## 2026-07-13 — npm supply-chain hardening (pwa/.npmrc)
+
+- npm supply-chain hardening in pwa/.npmrc · audit vs the 2026 npm attacks found
+  nothing compromised (no flagged package/version in the 505-package lockfile,
+  zero deps declaring install scripts, no attack artifacts, npm audit clean, all
+  lockfile URLs point to registry.npmjs.org) · ignore-scripts=true is safe here
+  precisely because no dep in the tree runs lifecycle scripts; min-release-age=
+  7 days rejects freshly hijacked releases but is silently ignored by npm 10.9.8
+  (takes effect on a newer npm) · use npm ci (not npm install) in CI/clean
+  installs so the lockfile is enforced · 2026-07-13
 
 ## 2026-07-09 — M8 START (PLAN) — intervention correction flow
 
@@ -169,6 +378,95 @@ free.
 Tests: preview returns fields without persisting · commit re-validates edited
 fields (illegal dose still 422) · soft-delete then read → 404 · supersede deletes
 old + creates new + is idempotent on retry.
+
+## 2026-07-08 — Temporary hackathon self-signup + Turnstile captcha
+
+- Temporary hackathon self-signup (behind flags, OFF by default) · the permanent
+  design is admin-only alta of advisors (no self-signup), but a hackathon judge
+  needs to try the voice flow without the admin creating an account first ·
+  enabled by `settings.hackathon_signup_enabled` (backend) + `VITE_HACKATHON_SIGNUP`
+  (PWA) · the PWA shows a "Crear cuenta" path reusing the OTP flow with
+  `shouldCreateUser: true`; on first login the user has a valid token but NO
+  advisor row, so `POST /api/bootstrap` (new `current_auth_user` dependency that
+  verifies the token WITHOUT requiring an advisor — `current_advisor_id` would
+  401) provisions an ACTIVE demo advisor + a seeded sandbox (holding + 2 plots +
+  "tractor") via `OnboardingService`, idempotent, matching the spec's canonical
+  demo audio ("Finca de Pepe", araña roja on citrus) so recording works out of
+  the box · products (Abamectina) are the shared MAPA catalog, not seeded · the
+  only genuinely UNIQUE column that could collide across judges is `advisors.dni`
+  (verified in the migrations), so demo ids carry an 8-hex slice of the auth uid ·
+  App.jsx gates Home behind the bootstrap (sessionStorage `pending_bootstrap`
+  flag) so the first list call never 401s on a missing advisor · to remove after
+  the event: delete the flag, `/api/bootstrap`, `OnboardingService`,
+  `current_auth_user`/`AuthUser`, the four `save_*` ports (optional, generic) and
+  the PWA signup path · 2026-07-08
+- Signup captcha deferred, not built · with self-signup the open OTP endpoint is a
+  real abuse surface (bots, email-bomb, cost), unlike the closed login where a
+  captcha added only friction · chosen: Supabase-native Cloudflare Turnstile
+  (config toggle + token on the signInWithOtp call), not a custom captcha · left
+  wired but inert (`getCaptchaToken()` returns undefined until `VITE_TURNSTILE_SITE_KEY`
+  is set and the widget mounted) so it activates with no code change · Supabase's
+  built-in rate limiting is the first line meanwhile · 2026-07-08
+- Turnstile captcha implemented (was deferred) · Cloudflare Turnstile widget
+  rendered on the whole login screen, not just signup, because Supabase's captcha
+  protection is PROJECT-WIDE: once enabled it gates every credential endpoint
+  (signInWithOtp for code + signup, signInWithPassword), so the token must ride on
+  all three; verifyOtp is not gated and carries none · script loaded lazily from
+  the login screen (explicit-render mode) so a normal visit never contacts
+  Cloudflare · single widget instance, hidden (not unmounted) on the code-verify
+  step to stay stable; token is single-use so we reset() after each credential
+  call · fully inert until VITE_TURNSTILE_SITE_KEY is set AND Turnstile is enabled
+  in Supabase Auth (with the secret key) — both flip together or login breaks ·
+  no CSP change needed: verified the repo enforces none (the decisions note about
+  "the PWA's CSP" was CSP-readiness / a deploy-layer policy, not in the code) · if
+  a deploy-layer CSP exists, allow challenges.cloudflare.com in script-src +
+  frame-src · 2026-07-08
+
+## 2026-07-07 — Logging + per-stage timing instrumentation
+
+- Logging turned on at INFO via a single `basicConfig` in the entry-point module
+  (`api.py`, imported by uvicorn) · chosen over uvicorn's `--log-level` (only
+  configures uvicorn's own loggers, not our `app.*`) and over a per-service setup
+  (must run once, at the process entry point) · httpx/httpcore raised to WARNING
+  to hide the Supabase client's per-request "HTTP Request:" INFO noise · 2026-07-07
+- Added per-stage timing logs (helper `services/timing.py`: a `timed("label")`
+  context manager logging elapsed ms at INFO) after a "runs a bit slow" report ·
+  instruments the I/O hot spots (both Qwen calls, PDF render, OSS upload, AEMET)
+  plus a per-flow total; totals wrap a thin `register`/`confirm` over an inner
+  `_register`/`_confirm` so the existing body is not re-indented · measured a
+  registration at ~5.5 s = Qwen audio 2.7 s + Qwen extract 1.4 s (~73%) + OSS
+  0.5 s + Supabase ~0.9 s (7 sequential REST calls) + PDF 28 ms: the LLM
+  round-trips dominate and are inherent, so no optimization pursued · 2026-07-07
+
+## 2026-07-06 — History date filter (timezone-correct) + PWA visual refresh
+
+- Extended `list_interventions` with optional `since`/`until` (UTC instants)
+  instead of reusing `list_interventions_in_period` · the period method is
+  holding-scoped, ascending and unbounded (it counts a holding's records for a
+  campaign validation); the history/today list is advisor-scoped, newest-first
+  and limited — the same query as Home, just date-bounded · discarded a third
+  `list_advisor_interventions_in_period` (real duplication) and re-scoping the
+  period method (breaks validations) · 2026-07-06
+- `/api/interventions?from=&to=` are civil Madrid days; the inbound layer maps
+  them to the exact UTC window `[from 00:00, (to+1) 00:00)` via `zoneinfo` before
+  the DB filter · keeps the repo a plain `created_at` range AND stays DST-correct
+  (rule 9) · discarded the frontend sending UTC instants (more client timezone
+  juggling) and a naive civil-date comparison (the day-boundary fuzz the count
+  method tolerates would drop a 00:30-Madrid record from "today") · 2026-07-06
+- Today's list queries the backend by date (`from==to==` Madrid today) instead
+  of fetching everything and filtering client-side · one code path for today and
+  history, and the correct-timezone window is computed server-side once · list
+  limit raised 100→500 so a season's history is not silently truncated (paginate
+  if that ever breaks) · 2026-07-06
+- PWA visual refresh keeps and refines the brand "cultivated soil" palette rather
+  than going neutral-SaaS · the warm agronomic identity (from the prototype) sets
+  it apart and is part of the TFG; emoji replaced by an inline SVG icon set (the
+  PWA's CSP blocks icon fonts/CDNs), a shared AppBar and tinted status badges ·
+  2026-07-06
+- Dictation extracted to a reusable `<Dictate>` button (mic → POST /api/transcribe
+  → text via callback) · the effectiveness assessment already had it and the
+  campaign-validation remarks needed the same, so one component serves both
+  instead of duplicating the MediaRecorder state machine · 2026-07-06
 
 ## 2026-07-04 — M7.3 PWA: validation screen (grouped by holding → campaign)
 
@@ -413,6 +711,27 @@ old + creates new + is idempotent on retry.
 - test_serialize_columns now concatenates ALL migration files (was reading just
   the first via next(glob), which broke once a second migration existed).
 
+## 2026-06-30 — M5 step 4a: iteaf_warning on execution
+
+- DECIDED the ITEAF inspection validity = 3 years, in `settings`
+  (`iteaf_validity_years`), not hard-coded in the domain · RD 1702/2011 set it
+  at 5 years originally and 3 years for equipment in professional use since
+  2020-01-01; a settings value documents it as a normative parameter that can
+  shift again without touching domain code. DISCARDED 5 years (pre-2020, no
+  longer current) and a fixed domain constant (would bury a legal number in a
+  pure function). The value is injected into `ExecutionService` via the
+  container, so the service stays free of a `settings` import (hexagonal).
+- ADDED pure `iteaf_inspection_expired(treatment_date, inspection_date,
+  validity_years)` in `calculations.py` — the slot its docstring had reserved.
+  A MISSING inspection date counts as a warning (True): an unrecorded inspection
+  cannot prove the machine is in-date. Leap-day guard (Feb 29 -> Feb 28 in a
+  non-leap expiry year).
+- ADDED `Repository.get_equipment(equipment_id)` (only `get_equipment_by_alias`
+  existed) · FLUJO B needs to load the machine by id to read its inspection date.
+  `ExecutionService` sets `iteaf_warning` only when an equipment is linked (an
+  OBSERVATION has none); it is a NON-BLOCKING notice, never a block (rule 8
+  spirit). No DB migration: both columns already existed in the initial schema.
+
 ## 2026-06-29 — Architecture: functional core for single-concept domain rules
 
 - KEPT the anemic-dataclass + transaction-script-service style on purpose · the
@@ -459,27 +778,6 @@ old + creates new + is idempotent on retry.
   campaign validation = M6/M7). The prototype is a visual MAP, not a contract —
   its Login still shows the dropped magic link.
 - OPEN gap (unrelated): Supabase client has no explicit timeout (see note below).
-
-## 2026-06-30 — M5 step 4a: iteaf_warning on execution
-
-- DECIDED the ITEAF inspection validity = 3 years, in `settings`
-  (`iteaf_validity_years`), not hard-coded in the domain · RD 1702/2011 set it
-  at 5 years originally and 3 years for equipment in professional use since
-  2020-01-01; a settings value documents it as a normative parameter that can
-  shift again without touching domain code. DISCARDED 5 years (pre-2020, no
-  longer current) and a fixed domain constant (would bury a legal number in a
-  pure function). The value is injected into `ExecutionService` via the
-  container, so the service stays free of a `settings` import (hexagonal).
-- ADDED pure `iteaf_inspection_expired(treatment_date, inspection_date,
-  validity_years)` in `calculations.py` — the slot its docstring had reserved.
-  A MISSING inspection date counts as a warning (True): an unrecorded inspection
-  cannot prove the machine is in-date. Leap-day guard (Feb 29 -> Feb 28 in a
-  non-leap expiry year).
-- ADDED `Repository.get_equipment(equipment_id)` (only `get_equipment_by_alias`
-  existed) · FLUJO B needs to load the machine by id to read its inspection date.
-  `ExecutionService` sets `iteaf_warning` only when an equipment is linked (an
-  OBSERVATION has none); it is a NON-BLOCKING notice, never a block (rule 8
-  spirit). No DB migration: both columns already existed in the initial schema.
 
 ## 2026-06-29 — M5 step 3: weather via Open-Meteo (FLUJO B)
 
@@ -596,6 +894,28 @@ old + creates new + is idempotent on retry.
   single call · DISCARDED the `resetPasswordForEmail` + PASSWORD_RECOVERY flow:
   more screens and an extra round-trip for no gain once you can log in by code ·
   2026-06-29
+
+## 2026-06-26 — Robustness pass: vendor timeouts, RepositoryError, idempotency race
+
+- Synchronous vendor SDKs run in worker threads get an explicit 30s transport
+  timeout (settings.vendor_timeout_seconds): DashScope `request_timeout` (default
+  300s) and OSS `connect_timeout` (default 60s × 3 retries) · high defaults hang
+  a field advisor AND leak the ThreadPoolExecutor until it saturates; the
+  transport timeout kills the request so the thread dies and surfaces as a domain
+  error · discarded `asyncio.wait_for` (returns control but leaves the thread
+  orphaned, pool still fills up); Supabase left untouched (async client, no
+  thread pool — different failure mode) · 2026-06-26
+- Repository wraps PostgREST/network failures as RepositoryError (a new
+  InfrastructureError subtype) via a single `_run()` helper around `.execute()` ·
+  a DB outage is infrastructure (inbound → 503 "retry"), not the catch-all 500
+  "bug"; deserialization stays OUTSIDE the wrap so a mapping bug remains a real
+  500 · 2026-06-26
+- save_intervention catches the UNIQUE(transaction_id) violation (SQLSTATE
+  23505) and returns the already-saved row · closes the TOCTOU between the
+  pipeline's idempotency pre-check and the INSERT: two concurrent same-tx
+  requests both pass the check, the constraint rejects the loser, and we honour
+  idempotency (hard rule 3) instead of returning a 503; any other unique
+  violation finds no row and re-raises · 2026-06-26
 
 ## 2026-06-25 — M4: fix mobile PDF download (cross-origin attachment → blob)
 
@@ -1057,230 +1377,3 @@ old + creates new + is idempotent on retry.
 - One `Repository` ABC (not one per entity) with only FLUJO A's six methods ·
   a single port matches the spec layout and the single Supabase adapter;
   splitting per entity is abstraction ahead of need · 2026-06-12
-- Synchronous vendor SDKs run in worker threads get an explicit 30s transport
-  timeout (settings.vendor_timeout_seconds): DashScope `request_timeout` (default
-  300s) and OSS `connect_timeout` (default 60s × 3 retries) · high defaults hang
-  a field advisor AND leak the ThreadPoolExecutor until it saturates; the
-  transport timeout kills the request so the thread dies and surfaces as a domain
-  error · discarded `asyncio.wait_for` (returns control but leaves the thread
-  orphaned, pool still fills up); Supabase left untouched (async client, no
-  thread pool — different failure mode) · 2026-06-26
-- Repository wraps PostgREST/network failures as RepositoryError (a new
-  InfrastructureError subtype) via a single `_run()` helper around `.execute()` ·
-  a DB outage is infrastructure (inbound → 503 "retry"), not the catch-all 500
-  "bug"; deserialization stays OUTSIDE the wrap so a mapping bug remains a real
-  500 · 2026-06-26
-- save_intervention catches the UNIQUE(transaction_id) violation (SQLSTATE
-  23505) and returns the already-saved row · closes the TOCTOU between the
-  pipeline's idempotency pre-check and the INSERT: two concurrent same-tx
-  requests both pass the check, the constraint rejects the loser, and we honour
-  idempotency (hard rule 3) instead of returning a 503; any other unique
-  violation finds no row and re-raises · 2026-06-26
-- Extended `list_interventions` with optional `since`/`until` (UTC instants)
-  instead of reusing `list_interventions_in_period` · the period method is
-  holding-scoped, ascending and unbounded (it counts a holding's records for a
-  campaign validation); the history/today list is advisor-scoped, newest-first
-  and limited — the same query as Home, just date-bounded · discarded a third
-  `list_advisor_interventions_in_period` (real duplication) and re-scoping the
-  period method (breaks validations) · 2026-07-06
-- `/api/interventions?from=&to=` are civil Madrid days; the inbound layer maps
-  them to the exact UTC window `[from 00:00, (to+1) 00:00)` via `zoneinfo` before
-  the DB filter · keeps the repo a plain `created_at` range AND stays DST-correct
-  (rule 9) · discarded the frontend sending UTC instants (more client timezone
-  juggling) and a naive civil-date comparison (the day-boundary fuzz the count
-  method tolerates would drop a 00:30-Madrid record from "today") · 2026-07-06
-- Today's list queries the backend by date (`from==to==` Madrid today) instead
-  of fetching everything and filtering client-side · one code path for today and
-  history, and the correct-timezone window is computed server-side once · list
-  limit raised 100→500 so a season's history is not silently truncated (paginate
-  if that ever breaks) · 2026-07-06
-- PWA visual refresh keeps and refines the brand "cultivated soil" palette rather
-  than going neutral-SaaS · the warm agronomic identity (from the prototype) sets
-  it apart and is part of the TFG; emoji replaced by an inline SVG icon set (the
-  PWA's CSP blocks icon fonts/CDNs), a shared AppBar and tinted status badges ·
-  2026-07-06
-- Dictation extracted to a reusable `<Dictate>` button (mic → POST /api/transcribe
-  → text via callback) · the effectiveness assessment already had it and the
-  campaign-validation remarks needed the same, so one component serves both
-  instead of duplicating the MediaRecorder state machine · 2026-07-06
-- Logging turned on at INFO via a single `basicConfig` in the entry-point module
-  (`api.py`, imported by uvicorn) · chosen over uvicorn's `--log-level` (only
-  configures uvicorn's own loggers, not our `app.*`) and over a per-service setup
-  (must run once, at the process entry point) · httpx/httpcore raised to WARNING
-  to hide the Supabase client's per-request "HTTP Request:" INFO noise · 2026-07-07
-- Added per-stage timing logs (helper `services/timing.py`: a `timed("label")`
-  context manager logging elapsed ms at INFO) after a "runs a bit slow" report ·
-  instruments the I/O hot spots (both Qwen calls, PDF render, OSS upload, AEMET)
-  plus a per-flow total; totals wrap a thin `register`/`confirm` over an inner
-  `_register`/`_confirm` so the existing body is not re-indented · measured a
-  registration at ~5.5 s = Qwen audio 2.7 s + Qwen extract 1.4 s (~73%) + OSS
-  0.5 s + Supabase ~0.9 s (7 sequential REST calls) + PDF 28 ms: the LLM
-  round-trips dominate and are inherent, so no optimization pursued · 2026-07-07
-- Temporary hackathon self-signup (behind flags, OFF by default) · the permanent
-  design is admin-only alta of advisors (no self-signup), but a hackathon judge
-  needs to try the voice flow without the admin creating an account first ·
-  enabled by `settings.hackathon_signup_enabled` (backend) + `VITE_HACKATHON_SIGNUP`
-  (PWA) · the PWA shows a "Crear cuenta" path reusing the OTP flow with
-  `shouldCreateUser: true`; on first login the user has a valid token but NO
-  advisor row, so `POST /api/bootstrap` (new `current_auth_user` dependency that
-  verifies the token WITHOUT requiring an advisor — `current_advisor_id` would
-  401) provisions an ACTIVE demo advisor + a seeded sandbox (holding + 2 plots +
-  "tractor") via `OnboardingService`, idempotent, matching the spec's canonical
-  demo audio ("Finca de Pepe", araña roja on citrus) so recording works out of
-  the box · products (Abamectina) are the shared MAPA catalog, not seeded · the
-  only genuinely UNIQUE column that could collide across judges is `advisors.dni`
-  (verified in the migrations), so demo ids carry an 8-hex slice of the auth uid ·
-  App.jsx gates Home behind the bootstrap (sessionStorage `pending_bootstrap`
-  flag) so the first list call never 401s on a missing advisor · to remove after
-  the event: delete the flag, `/api/bootstrap`, `OnboardingService`,
-  `current_auth_user`/`AuthUser`, the four `save_*` ports (optional, generic) and
-  the PWA signup path · 2026-07-08
-- Signup captcha deferred, not built · with self-signup the open OTP endpoint is a
-  real abuse surface (bots, email-bomb, cost), unlike the closed login where a
-  captcha added only friction · chosen: Supabase-native Cloudflare Turnstile
-  (config toggle + token on the signInWithOtp call), not a custom captcha · left
-  wired but inert (`getCaptchaToken()` returns undefined until `VITE_TURNSTILE_SITE_KEY`
-  is set and the widget mounted) so it activates with no code change · Supabase's
-  built-in rate limiting is the first line meanwhile · 2026-07-08
-- Turnstile captcha implemented (was deferred) · Cloudflare Turnstile widget
-  rendered on the whole login screen, not just signup, because Supabase's captcha
-  protection is PROJECT-WIDE: once enabled it gates every credential endpoint
-  (signInWithOtp for code + signup, signInWithPassword), so the token must ride on
-  all three; verifyOtp is not gated and carries none · script loaded lazily from
-  the login screen (explicit-render mode) so a normal visit never contacts
-  Cloudflare · single widget instance, hidden (not unmounted) on the code-verify
-  step to stay stable; token is single-use so we reset() after each credential
-  call · fully inert until VITE_TURNSTILE_SITE_KEY is set AND Turnstile is enabled
-  in Supabase Auth (with the secret key) — both flip together or login breaks ·
-  no CSP change needed: verified the repo enforces none (the decisions note about
-  "the PWA's CSP" was CSP-readiness / a deploy-layer policy, not in the code) · if
-  a deploy-layer CSP exists, allow challenges.cloudflare.com in script-src +
-  frame-src · 2026-07-08
-- npm supply-chain hardening in pwa/.npmrc · audit vs the 2026 npm attacks found
-  nothing compromised (no flagged package/version in the 505-package lockfile,
-  zero deps declaring install scripts, no attack artifacts, npm audit clean, all
-  lockfile URLs point to registry.npmjs.org) · ignore-scripts=true is safe here
-  precisely because no dep in the tree runs lifecycle scripts; min-release-age=
-  7 days rejects freshly hijacked releases but is silently ignored by npm 10.9.8
-  (takes effect on a newer npm) · use npm ci (not npm install) in CI/clean
-  installs so the lockfile is enforced · 2026-07-13
-- Offline pending queue (manual retry) in the PWA · the M4 "offline queue" idea,
-  finally built minimal for the hackathon: when preview/commit cannot reach the
-  server (fetch TypeError / navigator.onLine false — an HTTP 422 is NOT queued,
-  the server answered), the take (blob + transactionId + deviceTimestamp, the
-  exact trio hard rules 2/3 demand a retry to reuse) is parked in IndexedDB
-  (`pendingTakes.js`, hand-rolled ~70-line wrapper, no new dependency) and Home
-  shows a "Pendientes de sincronizar" section with per-take playback, Reintentar
-  (feeds the take back into the Recorder via useImperativeHandle — an event, not
-  a prop — and replays the normal M8 preview → review → commit flow) and
-  Descartar (confirm dialog; legal because a pending take never reached the
-  server, so it was never a record) · retry is MANUAL, not Background Sync:
-  the API doesn't exist on iOS Safari (the reference device) and auto-sync
-  would have to skip the M8 human review · IndexedDB here is best-effort
-  storage (Safari may evict after ~7 days idle): a same-day sync buffer, not
-  an archive — accepted · 2026-07-15
-- Dose validation made unit-aware (bug: it compared raw numbers, so 0.5 hl/ha
-  slipped past a 1.5 L/ha max) · two layers: prompt v2 gives Qwen the canonical
-  unit vocabulary and forbids converting magnitudes (a conversion mistake by the
-  LLM would silently write an illegal record — rule 4), while the backend keeps
-  the guarantee: `validation_service` normalizes both units (synonyms table +
-  hl/ml/cc/g factors, physical constants — no DB column), converts the dictated
-  dose to the catalog's unit and compares there · unknown units and incomparable
-  denominators (/hl spray concentration vs /ha surface — needs the spray volume)
-  are BLOCKED with a Spanish DoseError asking for the catalog's unit: the app
-  never certifies what it cannot check, never guesses · rejected alternative:
-  prompt-only fix (LLM output is untrusted, and the advisor can hand-edit the
-  unit in the review form) · 2026-07-15
-- List cards enriched with the names the advisor recognises (product trade
-  name, plot alias, holding owner) · the intervention row only stores the MAPA
-  number + ids, and resolving names like the detail endpoint does (4 reads per
-  record) would be N+1 over a 500-row history · chosen: three BATCH lookups over
-  the distinct ids (`list_plots_by_ids` / `list_holdings_by_ids` /
-  `list_products_by_registration_numbers`, PostgREST `.in_()`), so the whole
-  list costs 3 extra queries regardless of size; missing rows degrade to null
-  names, never break the list · the PWA card shows the trade name (MAPA number
-  as fallback) and a "Finca de Pepe · José Ruiz" context line · 2026-07-15
-- Signup code-step copy made generic ("Introdúcelo para continuar: crearemos
-  tu cuenta o, si tu correo ya tenía una, iniciaremos sesión con ella", button
-  "Continuar") · Supabase's signInWithOtp(shouldCreateUser) silently sends a
-  plain LOGIN code when the email already has an account, so the old "Crear
-  cuenta y entrar" copy lied to returning users, who ended inside their old
-  account believing they had created a new one · DISCARDED detecting the case:
-  (a) pre-send probe with shouldCreateUser:false lets anyone enumerate
-  registered emails from the signup form (the very leak the password login
-  avoids) and clashes with the single-use Turnstile token, which the
-  retry-with-create call would burn twice; (b) post-verify `created:false`
-  flag from /api/bootstrap + notice screen warns too late and adds a backend
-  field + an App screen for a TEMPORARY hackathon flow — honest copy that
-  covers both cases costs two strings and zero code · 2026-07-17
-- RGPD privacy notice added (static /privacidad page + "Al continuar aceptas
-  la política de privacidad" line under the login/signup card) · the app
-  handles real personal data (email, voice audio sent to DashScope, third-party
-  names/NIF/ROPO inside records) and its whole pitch is legal compliance, so
-  shipping with zero RGPD surface was incoherent · the notice is
-  prototype-honest: names the real processors (Supabase, Alibaba Cloud OSS +
-  DashScope with possible non-EEA transfer, AEMET/Open-Meteo coordinates only),
-  legal bases 6.1.b (service) and 6.1.c (RD 1311/2012 3-year retention — which
-  is why deletion is soft, tying hard rule 1 to art. 17's legal-obligation
-  limit), and warns not to enter real third-party data in a demo · DISCARDED
-  for now: consent checkbox (friction for judges — the inline line suffices for
-  a demo; a real deployment would add it), cookie banner (only strictly
-  necessary storage: session + offline queue), formal RGPD paperwork (RAT,
-  processor DPAs, transfer impact assessment — for when there is a real user) ·
-  route is public in both router branches so the logged-out login screen can
-  link it · 2026-07-17
-- Desktop polish pass on the PWA · brand casing unified as "AgroVoz" (AppBar,
-  login, manifest, privacy page) · every interactive element got a hover state
-  with one consistent language per kind — solid olive buttons darken
-  (hover:bg-olive-d), tinted chips deepen their tint (/10→/20), plain text
-  links underline, AppBar icon buttons gain the same soft white wash their
-  active state uses, record cards tint their border — because the demo is also
-  judged on desktop, where only 4 of 15 components had any pointer feedback ·
-  dropped the decorative leaf marks on the login card and the empty today-list
-  (the AppBar already carries the brand; the empty state's job is the example
-  phrase, not decoration) · "Historial" link restyled as a tinted chip, same
-  recipe as the detail screen's action chips · 2026-07-17
-- Login turned into a cover page: AppBar removed there and replaced by a brand
-  block — a spoken-word waveform (7 uneven bars, olive opacity ramp fading at
-  the edges; uneven on purpose, real speech is not a symmetric equalizer) over
-  a big "AgroVoz" wordmark ("Voz" in the olive gradient) and the tagline · the
-  leaf mark's removal had left the screen bare, and keeping the AppBar would
-  have printed the brand twice on one screen; the waveform ties the mark to
-  the product's core gesture (dictating) instead of generic agro imagery ·
-  2026-07-17
-- Detail-screen actions restyled from a pile of tinted chips (each its own
-  width/colour, ragged left) into an "Acciones" section matching the screen's
-  card language: one bg-card rounded-2xl card of full-width ActionRow rows
-  (tinted icon tile in the action's semantic tone + soil label + chevron,
-  delete in terra), dividers via divide-y — which works because every action
-  component renders a single root whether collapsed or expanded, so the
-  expanding confirm/assess forms open inside the card under their own bold
-  title · discarded a solid primary CTA + secondary links (hierarchizes
-  actions that are peers) and merely equal-width chips (still a foreign colour
-  block on that screen) · 2026-07-17
-- Removed the permanent hint under the record button ("Dicta una observación o
-  una prescripción…") · it duplicated what the button (REGISTRAR + mic) and
-  the empty today-list's example phrase already teach, overloading the home
-  with text · the recording-state hint ("Pulsa de nuevo para terminar") stays:
-  it only shows mid-action and teaches the one non-obvious gesture, that the
-  same button stops · 2026-07-17
-- Replaced the app icon/favicon — it was still Vite's template purple bolt
-  (favicon.svg + both manifest PNGs), i.e. a foreign brand on the browser tab
-  and the installed-app icon · new mark = the login's waveform on the olive
-  gradient: favicon.svg hand-written, PNGs (192/512) drawn with Pillow
-  full-bleed with the bars inside the maskable safe zone so one file serves
-  the `any` and `maskable` purposes · already-installed PWAs keep the old
-  icon until reinstalled · 2026-07-17
-- Replaced the two window.confirm() dialogs (discard pending take, delete
-  record) with an in-app ConfirmDialog (backdrop + card in the app's visual
-  language, terra confirm button) · the native dialog broke the demo's look
-  and leaks the site URL in its title; the two-step guarantee for destructive
-  actions is unchanged — the action only runs from the dialog's confirm ·
-  2026-07-17
-- ReviewForm gained the execution-only fields (caldo, aplicador, ROPO del
-  aplicador), shown only when record_type is EXECUTION · they existed in
-  ExtractedFields and rode along uneditable, so a directly-dictated execution
-  (or a correction switched to Ejecución) could not fix a mis-heard operator
-  or spray volume in review — FLUJO B's confirm form covered only the
-  prescription→execution path · same labels as that form; backend unchanged
-  (fields were already optional in the schema) · 2026-07-17

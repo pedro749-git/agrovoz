@@ -32,7 +32,7 @@ _EXTRACTION_PROMPT = _PROMPT_PATH.read_text(encoding="utf-8")
 
 
 class QwenTranscriber(Transcriber):
-    """Qwen-Audio (ASR) over the advisor's field audio."""
+    """qwen3-asr-flash (ASR) over the advisor's field audio."""
 
     async def transcribe(self, audio: bytes) -> str:
         return await asyncio.to_thread(self._transcribe, audio)
@@ -66,7 +66,7 @@ class QwenTranscriber(Transcriber):
 
 
 class QwenExtractor(Extractor):
-    """Qwen Instruct: transcription -> validated ExtractedFields."""
+    """qwen-flash: transcription -> validated ExtractedFields."""
 
     @property
     def prompt_version(self) -> str:

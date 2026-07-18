@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     # only public keys. ``aud`` is the claim Supabase puts on access tokens.
     supabase_jwt_aud: str = "authenticated"
 
-    # DashScope (Qwen-Audio + Qwen Instruct)
+    # DashScope (qwen3-asr-flash: speech→text · qwen-flash: text→JSON)
     dashscope_api_key: SecretStr
     qwen_base_url: str = "https://dashscope-intl.aliyuncs.com"
     qwen_audio_model: str = "qwen3-asr-flash"

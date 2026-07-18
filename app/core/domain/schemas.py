@@ -11,7 +11,7 @@ from pydantic import BaseModel
 
 
 class ExtractedFields(BaseModel):
-    """What Qwen Instruct extracts from the audio. The LLM classifies the type."""
+    """What the extractor LLM extracts from the audio. The LLM classifies the type."""
 
     record_type: Literal["OBSERVATION", "PRESCRIPTION", "EXECUTION"]
     plot_alias: str  # mandatory ALWAYS

@@ -1,195 +1,126 @@
-# GIP Advisor — voice middleware for phytosanitary records
+# AgroVoz — voice-to-legal phytosanitary records
 
-The advisor dictates a short voice note in the field (*"Finca de Pepe, Abamectina
-1,5 litros por hectárea, araña roja, tractor"*) and the system produces the
-legally valid phytosanitary record: transcription (Qwen-Audio) → field extraction
-to JSON (Qwen Instruct) → legal validation → Supabase (PostgreSQL) → official PDF.
+**A GIP advisor dictates a 10-second voice note in the field; AgroVoz turns it
+into a legally valid phytosanitary record.** On 2027-01-01, electronic
+phytosanitary records become mandatory for every farm in Spain (RD 1311/2012,
+EU Regulation 2023/564) — but the advisors who create them work standing in a
+field, with dirty hands and no time for forms.
 
-Legal context: Spanish RD 1311/2012 (Annex III) and EU Regulation 2023/564.
-Electronic phytosanitary records become mandatory in Spain on 2027-01-01.
+> *"Finca de Pepe, Abamectina 1,5 litros por hectárea, araña roja, tractor"*
+> → transcription → field extraction → **legal validation** → PostgreSQL →
+> official PDF.
 
-> Bachelor's thesis (TFG). The full specification lives in
-> `docs/mvp_asesor_gip_v3.md` (in Spanish — the domain is Spanish-regulatory).
+**🔗 Live demo:** `https://REPLACE-ME` (deployed on Alibaba Cloud ECS)
+<!-- 📸 TODO: replace with the real ECS https URL before submitting.
+     If the deploy is not live at submission time, delete the line. -->
 
-## Current status
+<!-- 📸 TODO: hero GIF — the money shot for judges. Screen-record the phone:
+     tap record → dictate the demo phrase → review screen with ✓/⚠️ markers →
+     confirm → open the PDF. 10–20 s, looped. Save as docs/img/demo.gif -->
+![AgroVoz demo — voice note to validated legal record](docs/img/demo.gif)
 
-Built in incremental milestones; each one works end-to-end before the next
-begins.
+## How it works
 
-- [x] **M1** — Spike: audio → JSON to the console (validate that Qwen
-      understands a field advisor). Throwaway, archived at
-      `docs/historico/spike_main.py`.
-- [x] **M2** — **Verified end-to-end.** Telegram voice note → transcription +
-      extraction with Qwen → legal validation → row persisted in Supabase.
-      Hexagonal architecture (core + ports + adapters), fuzzy lookup of
-      plot/product/equipment by the dictated alias.
-- [x] **M3** — **Verified end-to-end.** Prescription PDF (ReportLab) + upload to
-      Alibaba Cloud OSS, with a signed link (expires in 1h) downloaded from a phone.
-- [x] **M4** — **Verified on a real phone.** Installable PWA (React + Vite +
-      Tailwind): login via an email OTP code (or password), record button, audio
-      upload to the same pipeline, today's records list and on-demand PDF download.
-- [x] **M5** — State machine (OBSERVATION / PRESCRIBED → EXECUTED) + execution
-      confirmation (FLUJO B: real dose/area/spray/operator, re-validated) +
-      weather captured at the real date via Open-Meteo (with `WEATHER_PENDING` on
-      failure) + ITEAF inspection expiry warning + PWA list → detail screen (with
-      the actions on the detail).
-- [x] **M6** — Effectiveness assessment (Good/Fair/Poor) + date + dictated reason
-      + delivery-note number. EXECUTED → ASSESSED (`AssessmentService`), an
-      assessment endpoint and a transcription-only endpoint; in the PWA, an
-      assessment block on the detail with microphone dictation (transcribe →
-      editable text) and a read-only view of the assessed record.
-- [x] **M7** — Campaign validations. The advisor signs their conformity over a
-      holding's records, mandatory twice per campaign (MID_CYCLE + FINAL), with a
-      signed PDF. Backend (`CampaignValidationService`, holdings overview and
-      validation endpoints) and PWA validation screen grouped by holding and
-      campaign, with a 0/2 counter.
+```mermaid
+flowchart LR
+    A["🎙️ Voice note<br/>(PWA on the phone)"] --> B["Qwen3-ASR-Flash<br/>transcription"]
+    B --> C["Qwen-Flash<br/>extraction → JSON"]
+    C --> D["Pydantic gate<br/>(LLM output is untrusted)"]
+    D --> E["Legal validation<br/>product · dose · area"]
+    E -->|advisor reviews ✓/⚠️ and confirms| F[("Supabase<br/>PostgreSQL")]
+    F --> G["📄 Official PDF<br/>ReportLab → Alibaba OSS"]
+    E -->|illegal record| X["🚫 Blocked with a clear<br/>message in Spanish"]
+```
 
-M1–M7 were the planned MVP. Since the hackathon deadline moved to 2026-07-20,
-post-M7 work continues the same numbering as a **post-MVP hardening phase (M8+)**.
+What makes it more than a transcription toy:
 
-- [x] **M8** — Review-before-persist and correction of interventions.
-      - [x] **M8.1** — FLUJO A split into `preview` (transcribe + extract, no save)
-            and `commit` (persist the reviewed fields), so nothing from the LLM
-            reaches the legal record unseen (hard rule 4). `preview` also resolves
-            the dictated names against the catalog and canonicalizes them.
-      - [x] **M8.2** — **Verified on a real phone.** Soft-delete of interventions
-            + correction by supersede (a new record replaces the old one, which is
-            soft-deleted and linked via `supersedes_intervention_id`, hard rules
-            1/7). The replacement inherits the original's dictation timestamp,
-            transcription and `created_at`; the PWA offers "Corregir" (the review
-            form prefilled from the record) and "Eliminar" on the detail screen.
-      - [x] **M8.3** — **Verified on a real phone.** Two-phase PWA record flow:
-            record → review the extracted fields (prefilled with catalog-resolved
-            names, a ✓/⚠️ marker per identity field, the plot's crop/SIGPAC) →
-            confirm and save.
-
-Also, since M7, an incremental polish pass (not a numbered milestone): a PWA
-visual refresh (inline SVG icon set replacing emoji, shared app bar, refined
-brand palette), a **history** screen with a date-range filter
-(`/api/interventions` accepts `?from=&to=`), and voice dictation on the
-campaign-validation remarks.
-
-Pre-hackathon hardening (July 2026): an **offline pending queue** (a recording
-made without coverage is kept on the device — with playback — and manually
-retried or discarded from a "Pendientes" list, reusing its original idempotency
-key and device timestamp); **unit-aware dose validation** (the dictated dose is
-converted to the catalog's unit before checking the legal maximum — 0.5 hl/ha
-no longer slips past a 1.5 L/ha cap — and unknown or incomparable units are
-blocked; extraction prompt bumped to v2); a highlighted "blocked by legal
-validation" card and staged progress messages on the recording flow; a
-ready-to-dictate demo phrase on the empty list; and list cards showing the
-product's trade name and the plot/owner (resolved in batch, never per row).
+- **Legal validation engine** — refuses to persist an illegal record: product
+  authorized, dose ≤ the registered maximum (**with unit conversion** — 0.5
+  hl/ha does not slip past a 1.5 L/ha cap), treated area ≤ the SIGPAC
+  enclosure's legal area, pre-harvest interval computed.
+- **Review before persist** — nothing from the LLM reaches the legal record
+  unseen: the advisor reviews every field with per-field ✓/⚠️ resolution
+  markers, then confirms.
+- **Full legal lifecycle** — prescription → execution confirmation (weather
+  captured at application time) → effectiveness assessment → twice-per-campaign
+  advisor validations. Corrections **never delete** a record (supersede +
+  soft-delete; 3-year retention).
+- **Offline queue** — no signal in the field? The take is stored on the device
+  (IndexedDB) with its original timestamp and idempotency key, and synced later
+  without duplicates.
 
 ## Stack
 
-**Backend**: Python 3.12 · FastAPI + Uvicorn · Pydantic V2 · Supabase
-(PostgreSQL + Auth via email OTP code / password) · Qwen-Audio + Qwen Instruct
-through DashScope · Alibaba Cloud OSS · ReportLab · weather via Open-Meteo.
-Dependencies managed with `uv`.
+- **Backend**: Python 3.12 · FastAPI · Pydantic V2 · hexagonal architecture
+  (ports & adapters). Dependencies via `uv`.
+- **AI**: Qwen3-ASR-Flash (speech→text) + Qwen-Flash (text→JSON) via DashScope,
+  with versioned few-shot prompts in field Spanish.
+- **Data & infra**: Supabase (PostgreSQL + email-OTP auth) · Alibaba Cloud OSS
+  (audio + PDFs) · ReportLab · Open-Meteo (weather) · Alibaba Cloud ECS (deploy).
+- **Frontend**: React 19 + Vite + Tailwind installable PWA.
 
-**PWA (M4)**: React 19 + Vite + Tailwind + vite-plugin-pwa. Dependencies managed
-with `npm`.
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full diagram and
+component walkthrough.
 
-## Architecture (hexagonal, from M2 on)
+## Quickstart
 
-```
-app/
-  core/        domain/ (models, schemas, states, errors, pure calculations)
-               ports/  (ABCs: Transcriber, Extractor, Repository, Notifier,
-                        Storage, PdfGenerator, Weather)
-               services/ (registration_pipeline = FLUJO A · execution_service =
-                          FLUJO B · assessment_service = FLUJO C ·
-                          campaign_validation_service · validation_service)
-  adapters/    inbound/  api.py (FastAPI: PWA REST API)
-               outbound/ qwen.py · supabase_repo.py · oss_storage.py ·
-                         reportlab_pdf.py · open_meteo_weather.py
-  config/      settings.py · container.py (composition root) · .env
-pwa/           React + Vite + Tailwind + vite-plugin-pwa (M4+ client)
-```
-
-The core depends only on ports (ABCs): the inbound adapter (the PWA REST API)
-calls the pipeline (`POST /api/records`) without touching business logic.
-
-## Local setup and run
-
-**1. Install dependencies**
 ```bash
+# Backend (Python 3.12 + uv)
 uv sync
-```
-
-**2. Configure the keys**
-```bash
-cp app/config/.env.example app/config/.env
-# Fill in by hand: SUPABASE_URL/SERVICE_KEY, DASHSCOPE_API_KEY and OSS_*.
-# The .env is never committed.
-```
-
-**3. Start the server** (port 8000, auto-reload)
-```bash
+cp app/config/.env.example app/config/.env   # fill in the keys by hand
 uv run uvicorn app.adapters.inbound.api:app --host 127.0.0.1 --port 8000 --reload
-```
-Quick check: `curl http://127.0.0.1:8000/health` → `{"status":"ok"}`.
 
-The backend has no UI of its own — the client is the PWA (next section), which
-calls this server over `/api/...`.
+# PWA (in another terminal)
+cd pwa && npm install && npm run dev
 
-## PWA (M4)
-
-The client the advisors use. It needs the backend running (previous section,
-port 8000). From the repo root:
-
-**1. Install dependencies** (first time only)
-```bash
-cd pwa
-npm install
-```
-
-**2. Start the dev server** (Vite, port 5173)
-```bash
-npm run dev
-```
-
-**3. Expose it over HTTPS** (in another terminal) — the microphone and PWA
-installation require a secure origin, so testing on a phone needs an HTTPS
-tunnel, not `http://localhost`:
-```bash
+# Phone testing needs HTTPS (mic + PWA install) — in a third terminal:
 cloudflared tunnel --url http://localhost:5173
 ```
-Open the `https://…trycloudflare.com` URL it prints on the phone, sign in with
-the code emailed to you (or with a password), record a note and it shows up in
-today's list.
 
-## Safe shutdown
+Health check: `curl http://127.0.0.1:8000/health` → `{"status":"ok"}`.
+Full step-by-step (keys, accounts, tunnel, tests, shutdown):
+[`docs/SETUP.md`](docs/SETUP.md).
 
-**Backend** — just stop Uvicorn (`Ctrl + C`).
+## Project status
 
-**PWA** — just `Ctrl + C` in both terminals: the tunnel (`cloudflared`) first,
-then Vite (`npm run dev`). Closing the tunnel destroys the `trycloudflare.com`
-URL (they are ephemeral), so there is nothing to revoke.
+Solo project — a 3rd-year CS student's bachelor's thesis (TFG) — built in
+strict incremental milestones, each one verified end-to-end **on a real
+phone** before starting the next.
 
-## Tests
-
-Few tests by methodology (one test per edge case, no exhaustive suite). The whole
-suite at once:
-
-```bash
-uv run pytest
-```
-
-The suite covers:
-
-| File | What it tests |
+| Milestone | Delivered |
 | --- | --- |
-| `test_registration_pipeline.py` | FLUJO A end-to-end (with fake ports) |
-| `test_execution_service.py` | FLUJO B: execution confirmation + weather + ITEAF warning |
-| `test_assessment_service.py` | FLUJO C: effectiveness assessment (EXECUTED → ASSESSED) |
-| `test_campaign_validation_service.py` | M7: campaign validation (period, conformity, remarks) |
-| `test_validation_service.py` | legal validation (dose, area, authorized product) |
-| `test_schemas.py` | `ExtractedFields` (sanitizing the LLM output) |
-| `test_serialize_columns.py` | domain model ↔ DB columns (no drift) |
-| `test_fuzzy_lookup.py` | fuzzy lookup of plot/product/equipment by alias |
-| `test_states.py` | state-machine transitions |
-| `test_auth.py` | Supabase JWT verification (`current_advisor_id`) |
-| `test_api.py` | endpoints and error mapping to `{error, mensaje}` |
+| M1 | Throwaway spike: audio → JSON in the console (proved Qwen understands a Spanish field advisor) |
+| M2 | Hexagonal skeleton; voice → Qwen extraction → legal validation → Supabase |
+| M3 | Prescription PDF (ReportLab) uploaded to Alibaba OSS, presigned link |
+| M4 | Installable PWA: OTP login, record button, today's list, PDF download |
+| M5 | State machine + execution confirmation (re-validated) + weather at application time + ITEAF warning |
+| M6 | Effectiveness assessment (EXECUTED → ASSESSED) + delivery-note number |
+| M7 | Twice-per-campaign advisor validations with a signed PDF |
+| M8 | Review-before-persist (preview/commit) + corrections by supersede + two-phase record flow |
+| Hardening | Offline pending queue · unit-aware dose validation · history with date filter · UI polish |
 
-For a single file: `uv run pytest tests/test_registration_pipeline.py`.
+The detailed design log (every decision taken **and** discarded) lives in
+[`docs/decisions.md`](docs/decisions.md); the project idea and its regulatory
+grounding, in depth, in [`docs/ABOUT.md`](docs/ABOUT.md).
+
+## What's next
+
+- **Full official MAPA product registry** — from the pilot catalog to the
+  complete national database of authorized products, doses and PHIs.
+- **SIEX/CUE export** — pushing records into the Ministry's digital holding
+  logbook, where they will be legally required to live.
+- **Advisor onboarding tooling** — the schema is already multi-tenant; what's
+  left is self-service catalog management (today the admin provisions advisors
+  and their holdings by hand) and digital signature for campaign validations.
+
+## Docs
+
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — diagrams + components
+- [`docs/SETUP.md`](docs/SETUP.md) — detailed install & run
+- [`docs/DEMO.md`](docs/DEMO.md) — demo video script + screen-by-screen walkthrough
+- [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md) — every flow with dictation
+  examples and all possible outcomes
+- [`docs/ABOUT.md`](docs/ABOUT.md) — the idea in depth: Devpost story +
+  regulatory context and the law-as-data-model design
+- [`docs/decisions.md`](docs/decisions.md) — design log: every decision,
+  taken and discarded
