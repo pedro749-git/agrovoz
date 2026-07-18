@@ -124,3 +124,7 @@ grounding, in depth, in [`docs/ABOUT.md`](docs/ABOUT.md).
   regulatory context and the law-as-data-model design
 - [`docs/decisions.md`](docs/decisions.md) — design log: every decision,
   taken and discarded
+
+## License
+
+MIT — see [LICENSE](LICENSE).
