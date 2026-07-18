@@ -10,9 +10,8 @@ field, with dirty hands and no time for forms.
 > → transcription → field extraction → **legal validation** → PostgreSQL →
 > official PDF.
 
-**🔗 Live demo:** `https://REPLACE-ME` (deployed on Alibaba Cloud ECS)
-<!-- 📸 TODO: replace with the real ECS https URL before submitting.
-     If the deploy is not live at submission time, delete the line. -->
+**🔗 Live demo:** <https://agrovoz.pedrofloresnavarro.com> (deployed on
+Alibaba Cloud ECS)
 
 <!-- 📸 TODO: hero GIF — the money shot for judges. Screen-record the phone:
      tap record → dictate the demo phrase → review screen with ✓/⚠️ markers →

@@ -104,3 +104,30 @@ uv run pytest tests/test_registration_pipeline.py   # single file
 | `test_states.py` | state-machine transitions |
 | `test_auth.py` | Supabase JWT verification (`current_advisor_id`) |
 | `test_api.py` | endpoints and error mapping to `{error, mensaje}` |
+
+## Production deployment (Alibaba Cloud ECS)
+
+The live instance is an Alibaba Cloud ECS **`ecs.e-c1m2.large`** in the
+**Singapore** region, serving **https://agrovoz.pedrofloresnavarro.com**. The
+repo is cloned at `/opt/agrovoz`; there is no Docker (single-user MVP, by
+methodology).
+
+- **Backend** — a systemd unit (`agrovoz.service`) runs
+  `uv run uvicorn app.adapters.inbound.api:app --host 127.0.0.1 --port 8000`
+  from `/opt/agrovoz`, with `Restart=always` (`RestartSec=3`) and enabled at
+  boot (`systemctl enable --now agrovoz`). The backend only listens on
+  localhost — nginx is the public face.
+- **PWA** — built on the instance (Node 20 via NodeSource; `npm ci &&
+  npm run build` in `pwa/`) and served by **nginx** as static files from
+  `/opt/agrovoz/pwa/dist`, with the SPA fallback
+  (`try_files $uri $uri/ /index.html`).
+- **Reverse proxy** — the same nginx server block proxies `/api/` to
+  `127.0.0.1:8000`, with `client_max_body_size 25M` (audio uploads) and
+  `proxy_read_timeout 120s` (the Qwen round-trips). **HTTPS** via Let's
+  Encrypt (`certbot` + `python3-certbot-nginx`) — the mic and the PWA
+  install require a secure origin in production exactly as in development.
+- **Configuration** — same two env files as development, living only on the
+  instance with `chmod 600`, never in git: `app/config/.env` (Supabase,
+  DashScope and OSS keys — the OSS bucket is reached from here) and
+  `pwa/.env.local` (build-time PWA variables, baked in by `npm run build` —
+  rebuild after changing it).
