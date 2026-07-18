@@ -19,6 +19,37 @@ field, with dirty hands and no time for forms.
      confirm → open the PDF. 10–20 s, looped. Save as docs/img/demo.gif -->
 ![AgroVoz demo — voice note to validated legal record](docs/img/demo.gif)
 
+## 🏆 Hackathon submission
+
+**Event:** Global AI Hackathon Series with Qwen Cloud — **Track 4: Autopilot
+Agent**.
+
+| Track requirement | Where AgroVoz delivers it |
+| --- | --- |
+| Ambiguous inputs | Free-form field Spanish, one button for three record types (the LLM classifies the audio); per-advisor ASR biasing + fuzzy resolution turn *"amavectina en la finca de Pepe"* into registered catalog entities |
+| External tools | DashScope (Qwen3-ASR-Flash + Qwen-Flash) · Supabase (PostgreSQL + OTP auth) · Alibaba Cloud OSS · Open-Meteo · ReportLab |
+| Human-in-the-loop checkpoints | Review-before-persist with per-field ✓/⚠️ markers — nothing from the LLM reaches the legal record unseen; execution confirmation and twice-per-campaign validations are explicit advisor sign-offs |
+| Production-readiness | Legal validation engine (blocks illegal records), idempotent offline queue, soft-delete audit trail with 3-year retention, deployed on Alibaba Cloud ECS |
+
+- **🎬 Demo video:** `TODO`
+  <!-- 📸 TODO: add the YouTube link before submitting. -->
+- **Alibaba Cloud usage in code:**
+  [`app/adapters/outbound/qwen.py`](app/adapters/outbound/qwen.py)
+  (DashScope: ASR + extraction) ·
+  [`app/adapters/outbound/oss_storage.py`](app/adapters/outbound/oss_storage.py)
+  (OSS: audio + PDFs) · deployed on an Alibaba Cloud ECS instance
+  ([`docs/SETUP.md`](docs/SETUP.md)).
+- **How AgroVoz uses Qwen Cloud:** Qwen3-ASR-Flash with **per-advisor context
+  biasing** (the advisor's registered catalog injected before transcription) +
+  Qwen-Flash extraction with **versioned few-shot prompts** in field Spanish →
+  a strict Pydantic gate (LLM output is untrusted input).
+- **License:** MIT.
+
+**For judges — 5-minute tour:** watch the demo video, then the system diagram
+in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), then the outcome matrix in
+[`docs/USER_GUIDE.md`](docs/USER_GUIDE.md) §3.3 — every dictation and how the
+legal engine answers it.
+
 ## How it works
 
 ```mermaid
