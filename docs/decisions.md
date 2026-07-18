@@ -4,6 +4,32 @@ One entry per decision (taken AND discarded): what · why · discarded
 alternatives · date. Newest first — new entries go at the top. This file
 becomes the thesis' design chapter.
 
+## 2026-07-18 — Per-advisor ASR biasing with the catalog (Qwen3-ASR-Flash context)
+
+- FLUJO A preview now injects the advisor's own catalog names — plot voice
+  aliases, product trade names, equipment aliases — as Qwen3-ASR-Flash
+  "context enhancement" (a system message before the audio), so the ASR
+  prefers "Abamectina" over "amavectina" the first time. Spanish labeled
+  lines, because Spanish is what the model hears · 2026-07-18
+- Best-effort by design: the three catalog reads run in parallel before the
+  transcription; any failure (or an empty catalog) degrades to an empty
+  context, which is byte-for-byte the pre-biasing call (same principle as
+  hard rule 8 — an optional enrichment never blocks the advisor). The fuzzy
+  resolver and the legal validation stay downstream unchanged: biasing only
+  reduces ⚠️ frequency, it is never the last line of defense (rules 4/5) ·
+  2026-07-18
+- Pests are NOT in the context: `target_pest` is free text with no catalog
+  table to bias from · 2026-07-18
+- New name-only Repository reads (`list_plot_aliases`, `list_equipment_aliases`
+  — advisor-wide, since at preview time no holding is resolved yet —
+  `list_product_names`), capped at 8k chars against the documented ~10k-token
+  context limit · 2026-07-18
+- Discarded: tool calling / a second resolution round-trip with the LLM —
+  more latency and cost for the same goal, and the fuzzy resolver already
+  covers the miss case · 2026-07-18
+- The generic POST /api/transcribe (assessment notes) stays unbiased: it
+  dictates free-text reasons, not catalog names · 2026-07-18
+
 ## 2026-07-18 — PWA navigation redesign: bottom bar, hanging title pill, Manrope
 
 - The full-width olive top bar was replaced by two pieces: a floating rounded

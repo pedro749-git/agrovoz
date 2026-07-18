@@ -40,6 +40,11 @@ from app.core.services.validation_service import validate_registration
 
 logger = logging.getLogger(__name__)
 
+# Qwen3-ASR-Flash accepts ~10k tokens of biasing context; the seed catalogs sit
+# far below this cap, so hitting it means something is wrong upstream — truncate
+# rather than fail the transcription over an oversized vocabulary.
+_ASR_CONTEXT_MAX_CHARS = 8000
+
 # The LLM classifies the audio; we map its type to the lifecycle state.
 # A direct EXECUTION collapses PRESCRIBED+EXECUTED into one stored EXECUTED row.
 _RECORD_TYPE_TO_STATE = {
@@ -96,10 +101,17 @@ class RegistrationPipeline:
         if advisor is None or advisor.account_status != "ACTIVE":
             raise DomainError("La cuenta del asesor no está activa.")
 
+        # Bias the ASR with this advisor's own catalog names so proper nouns
+        # ("Abamectina", "Finca de Pepe") are heard right the first time.
+        # Best-effort: an empty context degrades to a plain transcription; the
+        # fuzzy resolver below stays as the safety net either way.
+        with timed("FLUJO A: build ASR context"):
+            context = await self._build_asr_context(advisor_id)
+
         # Transcribe + extract (LLM output validated by ExtractedFields).
         # The two Qwen round-trips are the usual latency hot spot -> timed.
         with timed("FLUJO A: transcribe (Qwen audio)"):
-            transcription = await self._transcriber.transcribe(audio)
+            transcription = await self._transcriber.transcribe(audio, context=context)
         with timed("FLUJO A: extract (Qwen instruct)"):
             fields = await self._extractor.extract(transcription)
 
@@ -125,6 +137,40 @@ class RegistrationPipeline:
             product=product,
             equipment=equipment,
         )
+
+    async def _build_asr_context(self, advisor_id: UUID) -> str:
+        """The ASR biasing context: this advisor's catalog names, as Spanish
+        labeled lines (that is the language the model will hear). Only the
+        three cataloged identities go in — pests are free text with no table
+        to bias from. Best-effort by design: a catalog read failure or an
+        empty catalog returns "" and transcription proceeds exactly as without
+        biasing (same principle as hard rule 8 — an optional enrichment never
+        blocks the advisor)."""
+        try:
+            plots, products, equipment = await asyncio.gather(
+                self._repo.list_plot_aliases(advisor_id),
+                self._repo.list_product_names(),
+                self._repo.list_equipment_aliases(advisor_id),
+            )
+        except Exception:
+            logger.warning(
+                "ASR biasing context unavailable; transcribing without it",
+                exc_info=True,
+            )
+            return ""
+        lines = [
+            f"{label}: {', '.join(names)}."
+            for label, names in (
+                ("Parcelas", plots),
+                ("Productos fitosanitarios", products),
+                ("Equipos de aplicación", equipment),
+            )
+            if names
+        ]
+        if not lines:
+            return ""
+        header = "Vocabulario del asesor (nombres exactos de su catálogo):"
+        return "\n".join([header, *lines])[:_ASR_CONTEXT_MAX_CHARS]
 
     async def _resolve(
         self, fields: ExtractedFields, advisor_id: UUID

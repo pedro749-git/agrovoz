@@ -30,7 +30,11 @@ NOW = datetime(2026, 6, 15, 9, 0, tzinfo=timezone.utc)
 
 
 class FakeTranscriber:
-    async def transcribe(self, audio):
+    def __init__(self):
+        self.context = None  # captured to assert what biasing preview sent
+
+    async def transcribe(self, audio, context=""):
+        self.context = context
         return "texto dictado"
 
 
@@ -80,6 +84,15 @@ class FakeRepo:
     async def save_intervention(self, iv):
         self.saved = replace(iv, id=uuid4())
         return self.saved
+
+    async def list_plot_aliases(self, advisor_id):
+        return ["Finca de Pepe"]
+
+    async def list_product_names(self):
+        return ["Abamectina"]
+
+    async def list_equipment_aliases(self, advisor_id):
+        return ["tractor"]
 
 
 class FakePdf:
@@ -195,6 +208,37 @@ def test_preview_canonicalizes_dictated_names():
     assert preview.fields.product_name == "Abamectina"  # canonicalized
     assert preview.product is not None and preview.equipment is not None
     assert repo.saved is None
+
+
+def test_preview_biases_asr_with_catalog_context():
+    # preview hands the advisor's catalog names to the ASR as biasing context
+    # so proper nouns are heard right the first time.
+    fields = ExtractedFields(record_type="OBSERVATION", plot_alias="Finca de Pepe")
+    transcriber = FakeTranscriber()
+    pipeline = RegistrationPipeline(
+        transcriber, FakeExtractor(fields), FakeRepo(), FakePdf(), FakeStorage())
+    asyncio.run(pipeline.preview(audio=b"x", advisor_id=ADV))
+    assert "Finca de Pepe" in transcriber.context
+    assert "Abamectina" in transcriber.context
+    assert "tractor" in transcriber.context
+
+
+def test_preview_survives_catalog_context_failure():
+    # Biasing is best-effort: a catalog read failure degrades to an empty
+    # context and the transcription proceeds — it never blocks the advisor.
+    fields = ExtractedFields(record_type="OBSERVATION", plot_alias="Finca de Pepe")
+    repo = FakeRepo()
+
+    async def boom(advisor_id):
+        raise RuntimeError("db down")
+
+    repo.list_plot_aliases = boom
+    transcriber = FakeTranscriber()
+    pipeline = RegistrationPipeline(
+        transcriber, FakeExtractor(fields), repo, FakePdf(), FakeStorage())
+    preview = asyncio.run(pipeline.preview(audio=b"x", advisor_id=ADV))
+    assert transcriber.context == ""
+    assert preview.transcription == "texto dictado"
 
 
 def test_commit_stores_original_transcription_as_audit_trail():

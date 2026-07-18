@@ -487,6 +487,33 @@ class SupabaseRepository(Repository):
         )
         return [_deserialize(Plot, row) for row in res.data]
 
+    # ── ASR biasing context reads (post-M8 hardening) ──
+    async def list_plot_aliases(self, advisor_id: UUID) -> list[str]:
+        client = await get_client()
+        # Same plots->holdings join as get_plot_by_alias, but name-only.
+        res = await _run(
+            client.table("plots")
+            .select("voice_alias, holdings!inner(advisor_id)")
+            .eq("holdings.advisor_id", str(advisor_id))
+            .is_("deleted_at", "null")
+        )
+        return [row["voice_alias"] for row in res.data]
+
+    async def list_equipment_aliases(self, advisor_id: UUID) -> list[str]:
+        client = await get_client()
+        res = await _run(
+            client.table("equipment")
+            .select("equipment_alias, holdings!inner(advisor_id)")
+            .eq("holdings.advisor_id", str(advisor_id))
+            .is_("deleted_at", "null")
+        )
+        return [row["equipment_alias"] for row in res.data]
+
+    async def list_product_names(self) -> list[str]:
+        client = await get_client()
+        res = await _run(client.table("products").select("trade_name"))
+        return [row["trade_name"] for row in res.data]
+
     # ── Onboarding writes (hackathon self-signup, TEMPORARY) ──
     async def _insert_one(self, table: str, obj, cls):
         """Insert one domain dataclass and return it re-read with DB defaults.

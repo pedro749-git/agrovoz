@@ -34,20 +34,29 @@ _EXTRACTION_PROMPT = _PROMPT_PATH.read_text(encoding="utf-8")
 class QwenTranscriber(Transcriber):
     """qwen3-asr-flash (ASR) over the advisor's field audio."""
 
-    async def transcribe(self, audio: bytes) -> str:
-        return await asyncio.to_thread(self._transcribe, audio)
+    async def transcribe(self, audio: bytes, context: str = "") -> str:
+        return await asyncio.to_thread(self._transcribe, audio, context)
 
     @staticmethod
-    def _transcribe(audio: bytes) -> str:
+    def _transcribe(audio: bytes, context: str) -> str:
         # MultiModalConversation reads a data URI; we hand it the raw OGG bytes
         # base64-encoded so we never touch the local filesystem.
         import base64
 
         b64 = base64.b64encode(audio).decode("ascii")
+        # Qwen3-ASR-Flash context enhancement: free text in the system message
+        # biases recognition toward these names (the advisor's catalog). With no
+        # context the call is exactly the pre-biasing one.
+        messages: list[dict] = []
+        if context:
+            messages.append({"role": "system", "content": [{"text": context}]})
+        messages.append(
+            {"role": "user", "content": [{"audio": f"data:audio/ogg;base64,{b64}"}]}
+        )
         try:
             response = MultiModalConversation.call(
                 model=settings.qwen_audio_model,
-                messages=[{"role": "user", "content": [{"audio": f"data:audio/ogg;base64,{b64}"}]}],
+                messages=messages,
                 result_format="message",
                 asr_options={"language": "es", "enable_itn": True},
                 request_timeout=settings.vendor_timeout_seconds,

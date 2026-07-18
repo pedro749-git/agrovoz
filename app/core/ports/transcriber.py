@@ -11,5 +11,10 @@ class Transcriber(ABC):
     """
 
     @abstractmethod
-    async def transcribe(self, audio: bytes) -> str:
-        """audio: the recorded voice-note bytes as received (WebM from the PWA)."""
+    async def transcribe(self, audio: bytes, context: str = "") -> str:
+        """audio: the recorded voice-note bytes as received (WebM from the PWA).
+
+        context: optional biasing text — the advisor's own catalog names
+        (plots, products, equipment) the recognizer should prefer when it
+        hears something close. Empty string = no biasing, plain transcription.
+        """

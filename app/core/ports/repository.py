@@ -192,6 +192,26 @@ class Repository(ABC):
         """A holding's plots — shown under each holding on the validation screen
         so the advisor recognises it. Filters ``deleted_at IS NULL``."""
 
+    # ── ASR biasing context reads (post-M8 hardening) ──
+    # Name-only lists (not full entities): the ONLY consumer is the ASR context
+    # string handed to Qwen3-ASR-Flash before transcription, and it is built
+    # BEFORE anything is resolved — so plots/equipment scope to the ADVISOR
+    # (all their holdings), unlike the per-holding lookups above.
+    @abstractmethod
+    async def list_plot_aliases(self, advisor_id: UUID) -> list[str]:
+        """Voice aliases of every plot across the advisor's holdings.
+        Filters ``deleted_at IS NULL``."""
+
+    @abstractmethod
+    async def list_equipment_aliases(self, advisor_id: UUID) -> list[str]:
+        """Voice aliases of every equipment across the advisor's holdings.
+        Filters ``deleted_at IS NULL``."""
+
+    @abstractmethod
+    async def list_product_names(self) -> list[str]:
+        """Trade names of the whole product catalog (read-only MAPA seed, no
+        ``deleted_at``). Fine at seed scale; cap/re-scope at vademecum scale."""
+
     # ── Onboarding writes (hackathon self-signup, TEMPORARY) ──
     # Insert the four entities OnboardingService seeds for a fresh judge. They
     # are generic single-row inserts (an admin alta flow would reuse them), so
