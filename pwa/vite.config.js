@@ -48,6 +48,11 @@ export default defineConfig({
           },
         ],
       },
+      // The default precache is js/css/html only; add the bundled Manrope
+      // woff2 (and the icons) so the typeface survives offline in the field.
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+      },
       // Enable the service worker in `npm run dev` too, so we can test the
       // install flow on the phone without a production build.
       devOptions: {

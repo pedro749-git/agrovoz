@@ -1,14 +1,16 @@
 import { useState } from 'react'
 import { supabase } from './supabase.js'
 import AppBar from './AppBar.jsx'
+import BottomNav from './BottomNav.jsx'
 import Icon from './Icon.jsx'
 
-// Settings screen. For now its only job is letting an already-authenticated
-// advisor set (or change) their password. Because the session is live, this is
-// a single updateUser call — no recovery email needed. Once they have a
+// Settings screen (a bottom-nav tab — leaving it is the bar's job, no back
+// button). For now its only job is letting an already-authenticated advisor
+// set (or change) their password. Because the session is live, this is a
+// single updateUser call — no recovery email needed. Once they have a
 // password they can log in with the "Contraseña" tab instead of waiting for a
 // code each time.
-function Settings({ session, onClose }) {
+function Settings({ session }) {
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [status, setStatus] = useState('idle') // idle | saving | done | error
@@ -45,9 +47,9 @@ function Settings({ session, onClose }) {
 
   return (
     <div className="flex min-h-dvh flex-col bg-bone text-soil">
-      <AppBar title="Ajustes" subtitle={session.user.email} onBack={onClose} />
+      <AppBar title="Ajustes" subtitle={session.user.email} />
 
-      <main className="flex-1 overflow-y-auto px-6 pb-safe">
+      <main className="flex-1 overflow-y-auto px-6 pb-40">
         <section className="mx-auto mt-8 w-full max-w-xs">
           <h2 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-[0.14em] text-ink">
             <Icon name="lock" className="h-4 w-4" />
@@ -94,6 +96,8 @@ function Settings({ session, onClose }) {
           </form>
         </section>
       </main>
+
+      <BottomNav />
     </div>
   )
 }

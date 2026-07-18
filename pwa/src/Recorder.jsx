@@ -66,11 +66,6 @@ function Recorder({ onSaved, restoreRef, onPendingChange }) {
     setError(null)
   }
 
-  // Retrying is an EVENT (the advisor tapped "Reintentar"), not render data, so
-  // instead of reacting to a prop in an effect, Home calls restoreTake directly:
-  // useImperativeHandle publishes it on the ref Home passes in.
-  useImperativeHandle(restoreRef, () => ({ restoreTake }))
-
   // --- Refs: mutable boxes that survive re-renders but DON'T repaint ---
   // The MediaRecorder and the audio pieces are "machinery", not UI.
   const mediaRecorderRef = useRef(null)
@@ -135,6 +130,11 @@ function Recorder({ onSaved, restoreRef, onPendingChange }) {
     mediaRecorderRef.current?.stop() // triggers the onstop handler above
     setIsRecording(false)
   }
+
+  // Retrying is an EVENT (the advisor tapped "Reintentar"), not render data, so
+  // instead of reacting to a prop in an effect, Home calls restoreTake directly:
+  // useImperativeHandle publishes it on the ref Home passes in.
+  useImperativeHandle(restoreRef, () => ({ restoreTake }))
 
   // No network: park the take in IndexedDB and clear the screen. The advisor
   // retries it by hand from Home's "Pendientes" list when coverage returns.

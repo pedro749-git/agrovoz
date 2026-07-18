@@ -4,6 +4,38 @@ One entry per decision (taken AND discarded): what · why · discarded
 alternatives · date. Newest first — new entries go at the top. This file
 becomes the thesis' design chapter.
 
+## 2026-07-18 — PWA navigation redesign: bottom bar, hanging title pill, Manrope
+
+- The full-width olive top bar was replaced by two pieces: a floating rounded
+  bottom bar (Historial · Validar · raised centre button · Ajustes · Salir)
+  and a "hanging pill" top header — the section name in a centred olive
+  capsule, flat on top and rounded at the bottom; stacked screens (Detalle,
+  Corregir, Privacidad) keep a round floating back button instead of tabs.
+  Why: thumb reach on a phone held one-handed in the field, and the old
+  header icons were cramped · 2026-07-18
+- The bar's centre button only NAVIGATES to Home and wears a house icon; the
+  big record button stays on the Home screen. Discarded: putting the mic
+  itself in the bar as the record control (first draft) — it duplicated the
+  mic on Home and a stray tap could wipe an open review form; the house icon
+  makes "this is navigation, not recording" unambiguous · 2026-07-18
+- Salir moved into the bar behind the in-app ConfirmDialog: it now lives in
+  the thumb zone, and one stray tap must not sign the advisor out mid-field.
+  Discarded: an "Inicio" tab + Salir as a floating top sphere — redundant
+  once the centre button navigates home · 2026-07-18
+- Historial, Validaciones and Ajustes became bar tabs (no back chevron); the
+  SettingsRoute wrapper in App.jsx was removed with Settings' onClose prop ·
+  2026-07-18
+- App typeface: Manrope Variable via @fontsource-variable, bundled with the
+  app and added (woff2) to the service-worker precache — the PWA must keep
+  its face offline. Registered as --font-sans in Tailwind's @theme.
+  Discarded: Inter (neutral, less brand character), Outfit (weaker in dense
+  forms), Google Fonts CDN (dies without coverage) · 2026-07-18
+- Fixed pwa/.npmrc min-release-age from 10080 to 7: the value was written in
+  minutes (pnpm's convention) but npm reads DAYS, so the cutoff computed to
+  1998 and EVERY npm install failed with ENOVERSIONS · 2026-07-18
+- PENDING: verify the redesign on a real phone (bottom-bar safe-area on
+  iOS especially) before the hackathon freeze · 2026-07-18
+
 ## 2026-07-18 — Docs reorganization + audits for the hackathon
 
 - Docs reorganized for the hackathon: README rewritten judge-first (hook,

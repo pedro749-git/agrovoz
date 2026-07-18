@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import {
   createValidation,
   getValidationPdfUrl,
   listHoldings,
 } from './api.js'
 import AppBar from './AppBar.jsx'
+import BottomNav from './BottomNav.jsx'
 import Dictate from './Dictate.jsx'
 import Icon from './Icon.jsx'
 
@@ -33,7 +33,6 @@ function fmtDate(value) {
 // per campaign, the two conformity slots to sign. Grouped by HOLDING because a
 // validation covers the holding's records (rule 6), not a single plot's.
 function Validation() {
-  const navigate = useNavigate()
   const [holdings, setHoldings] = useState([])
   const [status, setStatus] = useState('loading') // loading | ready | error
   const [reload, setReload] = useState(0)
@@ -62,9 +61,9 @@ function Validation() {
 
   return (
     <div className="flex min-h-dvh flex-col bg-bone text-soil">
-      <AppBar title="Validaciones de campaña" onBack={() => navigate('/')} />
+      <AppBar title="Validaciones" subtitle="Conformidad de campaña" />
 
-      <main className="mx-auto w-full max-w-md flex-1 overflow-y-auto px-5 pb-safe">
+      <main className="mx-auto w-full max-w-md flex-1 overflow-y-auto px-5 pb-40">
         {status === 'loading' && (
           <p className="mt-6 text-center text-sm text-ink">Cargando…</p>
         )}
@@ -94,6 +93,8 @@ function Validation() {
           </ul>
         )}
       </main>
+
+      <BottomNav />
     </div>
   )
 }

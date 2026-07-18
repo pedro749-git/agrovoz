@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { listInterventions } from './api.js'
 import AppBar from './AppBar.jsx'
+import BottomNav from './BottomNav.jsx'
 import Icon from './Icon.jsx'
 import RecordCard from './RecordCard.jsx'
 
@@ -22,8 +22,6 @@ function shiftDays(dateStr, delta) {
 // /api/interventions endpoint powers this and the Home "today" list — only the
 // range differs.
 function History() {
-  const navigate = useNavigate()
-
   // Presets, computed once against today's Madrid date. `from`/`to` are civil
   // dates; '' means an open end (so "Todo" is from '' to '').
   const { today, presets } = useMemo(() => {
@@ -81,9 +79,9 @@ function History() {
 
   return (
     <div className="flex min-h-dvh flex-col bg-bone text-soil">
-      <AppBar title="Historial" onBack={() => navigate('/')} />
+      <AppBar title="Historial" />
 
-      <main className="mx-auto w-full max-w-md flex-1 overflow-y-auto px-5 pb-safe">
+      <main className="mx-auto w-full max-w-md flex-1 overflow-y-auto px-5 pb-40">
         {/* Filter panel: quick presets + a manual from/to range. */}
         <section className="mt-4 rounded-2xl border border-line bg-card p-4 shadow-card">
           <div className="flex flex-wrap gap-2">
@@ -177,6 +175,8 @@ function History() {
           </>
         )}
       </main>
+
+      <BottomNav />
     </div>
   )
 }

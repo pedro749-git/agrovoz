@@ -5,6 +5,10 @@
    each colour becomes a utility: --color-olive -> bg-olive / text-olive /
    border-olive, etc. The default Tailwind colours stay available too. */
 @theme {
+  /* Brand typeface: Manrope Variable (imported in main.jsx). Overriding
+     --font-sans re-fonts the whole app — Tailwind's preflight puts it on body. */
+  --font-sans: 'Manrope Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+
   --color-soil: #201a12; /* main text on light */
   --color-bone: #f5f2ea; /* agronomic-paper background */
   --color-card: #ffffff;

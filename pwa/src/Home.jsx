@@ -1,19 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { supabase } from './supabase.js'
 import { deletePending, listPending } from './pendingTakes.js'
-import AppBar, { BarButton } from './AppBar.jsx'
+import AppBar from './AppBar.jsx'
+import BottomNav from './BottomNav.jsx'
 import ConfirmDialog from './ConfirmDialog.jsx'
-import Icon from './Icon.jsx'
 import PendingList from './PendingList.jsx'
 import Recorder from './Recorder.jsx'
 import TodayList from './TodayList.jsx'
 
 // The main screen: record button on top, offline-pending recordings (if any),
-// then today's records. The header actions are icon buttons in the shared
-// AppBar; "Ajustes" navigates to its route instead of toggling a useState flag.
+// then today's records. Navigation lives in the shared BottomNav — the record
+// button stays HERE, big and unmistakable; the bar's centre button only leads
+// back to this screen.
 function Home() {
-  const navigate = useNavigate()
   // Bumped after each saved recording to make TodayList re-fetch.
   const [refreshKey, setRefreshKey] = useState(0)
 
@@ -60,24 +58,11 @@ function Home() {
 
   return (
     <div className="flex min-h-dvh flex-col bg-bone text-soil">
-      <AppBar
-        title="AgroVoz"
-        subtitle="Cuaderno de campo por voz"
-        actions={
-          <>
-            <BarButton
-              icon="shield-check"
-              title="Validaciones"
-              onClick={() => navigate('/validaciones')}
-            />
-            <BarButton icon="settings" title="Ajustes" onClick={() => navigate('/ajustes')} />
-            <BarButton icon="log-out" title="Salir" onClick={() => supabase.auth.signOut()} />
-          </>
-        }
-      />
+      <AppBar title="AgroVoz" subtitle="Cuaderno de campo por voz" />
 
-      <main ref={mainRef} className="flex-1 overflow-y-auto px-6 pb-safe">
-        <section className="flex flex-col items-center pt-10">
+      {/* pb-44 keeps the last card clear of the floating bottom bar. */}
+      <main ref={mainRef} className="flex-1 overflow-y-auto px-6 pb-44">
+        <section className="flex flex-col items-center pt-6">
           <Recorder
             onSaved={() => setRefreshKey((k) => k + 1)}
             restoreRef={recorderRef}
@@ -87,21 +72,13 @@ function Home() {
 
         <PendingList takes={pendingTakes} onRetry={retryPending} onDiscard={setTakeToDiscard} />
 
-        <section className="mx-auto mt-10 w-full max-w-md pb-8">
-          <div className="mb-1 flex items-center justify-between">
-            <h2 className="text-xs font-bold uppercase tracking-[0.14em] text-ink">Hoy</h2>
-            <button
-              type="button"
-              onClick={() => navigate('/historial')}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-olive/10 px-3 py-1.5 text-xs font-semibold text-olive transition hover:bg-olive/20 active:scale-[0.97]"
-            >
-              <Icon name="calendar" className="h-4 w-4" />
-              Historial
-            </button>
-          </div>
+        <section className="mx-auto mt-8 w-full max-w-md">
+          <h2 className="mb-1 text-xs font-bold uppercase tracking-[0.14em] text-ink">Hoy</h2>
           <TodayList refreshKey={refreshKey} />
         </section>
       </main>
+
+      <BottomNav />
 
       <ConfirmDialog
         open={takeToDiscard !== null}
