@@ -55,7 +55,9 @@ audio by its content:
 
 1. **Preview** — the audio is transcribed (Qwen3-ASR-Flash) and the fields
    extracted (Qwen-Flash), then resolved against the official catalog.
-   Nothing is persisted yet.
+   Transcription is biased toward the advisor's registered catalog names
+   (plots, products, equipment), so proper nouns tend to be heard right the
+   first time. Nothing is persisted yet.
 2. **Review** — a form shows every field prefilled, with a **✓/⚠️ marker per
    identity field**: ✓ = the dictated name matched a registered plot /
    product / equipment (canonical name shown, plus the plot's crop and

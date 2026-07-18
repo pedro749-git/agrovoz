@@ -36,7 +36,7 @@ It also covers the full legal lifecycle: prescription → execution confirmation
 Solo project, built in strict incremental milestones (M1–M8), each one working end-to-end on a real phone before starting the next — from a throwaway spike that proved Qwen could understand a Spanish field advisor, to the full state machine.
 
 - **Backend:** Python 3.12 + FastAPI, hexagonal architecture (ports & adapters), Pydantic V2 everywhere.
-- **AI:** Qwen3-ASR-Flash (speech→text) + Qwen-Flash (text→JSON) via DashScope, with versioned few-shot prompts written in field Spanish.
+- **AI:** Qwen3-ASR-Flash (speech→text) + Qwen-Flash (text→JSON) via DashScope, with per-advisor ASR context biasing (the advisor's registered catalog is injected before transcription) and versioned few-shot prompts written in field Spanish.
 - **Data & infra:** Supabase (PostgreSQL + OTP auth), Alibaba Cloud OSS for audio and PDFs, ReportLab for the official documents, deployed on Alibaba Cloud ECS.
 - **Frontend:** React + Vite + Tailwind PWA — installable, one big record button, offline queue for dead zones.
 
@@ -44,7 +44,7 @@ Solo project, built in strict incremental milestones (M1–M8), each one working
 
 - **LLM output is untrusted input.** Early on, the model happily invented plausible doses. Every extraction now passes through a strict Pydantic schema; a missing mandatory field returns a clear error in Spanish instead of a guessed value.
 - **Unit-blind dose validation.** The advisor says "0.5 hl/ha"; the catalog registers the limit as "1.5 L/ha". Naively comparing numbers silently approves an illegal dose — I built unit normalization into the validator, converting the dictated dose to the catalog's unit and **blocking** incomparable units instead of guessing.
-- **People don't talk like databases.** Resolving *"la finca de Pepe"* to the right registered holding required a canonicalization step with per-field resolution markers, so the advisor sees exactly what was matched and what needs review.
+- **People don't talk like databases.** Resolving *"la finca de Pepe"* to the right registered holding required a canonicalization step with per-field resolution markers, so the advisor sees exactly what was matched and what needs review. The final design is two layers fed by the same source of truth: the advisor's catalog biases the ASR *before* transcription (context enhancement), and the fuzzy resolver canonicalizes *after* it.
 - **The field has no signal — and iOS has no Background Sync.** Failed uploads queue in IndexedDB with the original device timestamp and a client-generated transaction ID (retries can never duplicate a legal record). Sync is deliberately manual: iOS Safari lacks the Background Sync API, and auto-syncing would skip the human review step.
 - **iPhone PWA auth.** Magic links open in a different browser than the installed PWA and the session lands in the wrong place — I had to switch to email OTP codes.
 - **The law as a state machine.** No backward transitions, no deletions: modeling corrections as a new record that supersedes the old one (inheriting the original treatment date and transcription for the audit chain) took several design iterations.

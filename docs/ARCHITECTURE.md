@@ -50,15 +50,26 @@ flowchart TB
 ## The pipeline (FLUJO A, two-phase since M8)
 
 1. **`POST /api/records/preview`** — audio in; Qwen3-ASR-Flash transcribes,
-   Qwen-Flash extracts fields as JSON, the strict `ExtractedFields`
-   Pydantic model sanitizes the output (LLM output is *untrusted input*), and
-   the dictated names are resolved against the official catalogs (fuzzy lookup
-   of plot/product/equipment by voice alias). Nothing is saved.
+   **biased by the advisor's catalog**: the same plot/product/equipment names
+   the resolver uses are read fresh on every preview (three parallel queries)
+   and injected as ASR context, so proper nouns tend to arrive already
+   canonical — if the catalog read fails or the catalog is empty, the context
+   degrades to empty and transcription proceeds unbiased. Qwen-Flash then
+   extracts fields as JSON, the strict `ExtractedFields` Pydantic model
+   sanitizes the output (LLM output is *untrusted input*), and the dictated
+   names are resolved against the official catalogs (fuzzy lookup of
+   plot/product/equipment by voice alias). Nothing is saved.
 2. The advisor reviews a form with per-field ✓/⚠️ resolution markers and can
    edit anything.
 3. **`POST /api/records`** — the reviewed fields go through **legal
    validation** and, only if they pass, are persisted and the official PDF is
    generated (ReportLab → OSS presigned link).
+
+Scaling note on the biasing set: it is the advisor's working vocabulary, not
+the full registry — plots and equipment are advisor-scoped, and while today's
+seed product catalog is small enough to send whole, at full-registry
+(vademécum) scale it would narrow to the products the advisor actually works
+with, with the fuzzy resolver handling the long tail.
 
 ### Legal validation (`validation_service`)
 

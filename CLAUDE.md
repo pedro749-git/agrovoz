@@ -57,7 +57,9 @@ continues the same numbering as a post-MVP hardening phase (M8+).
       retry from "Pendientes", original device timestamp + idempotency key
       reused) · unit-aware dose validation (dictated dose converted to the
       catalog's unit; prompt bumped to v2) · history screen with date-range
-      filter (`?from=&to=`) · PWA visual polish (icons, app bar, brand)
+      filter (`?from=&to=`) · PWA visual polish (icons, app bar, brand) ·
+      per-advisor ASR biasing (catalog names injected as Qwen3-ASR-Flash
+      context; fuzzy resolver stays downstream — verified on a real phone)
 
 **Update this checklist when a milestone is completed.** If the user asks for
 something from a future milestone, point it out and ask before implementing.
@@ -121,7 +123,8 @@ docs/            ABOUT.md · ARCHITECTURE.md · SETUP.md · DEMO.md ·
 - Supabase (PostgreSQL + Auth by email OTP code / password — magic link dropped
   for iPhone PWA compat; verify JWT via asymmetric signing keys / JWKS endpoint
   from M4 — not the legacy shared HS256 secret).
-- Qwen3-ASR-Flash (speech→text) + Qwen-Flash (text→JSON) via DashScope.
+- Qwen3-ASR-Flash (speech→text, with per-advisor catalog biasing) +
+  Qwen-Flash (text→JSON) via DashScope.
 - Alibaba Cloud OSS (audio + PDFs), ReportLab (PDFs), Open-Meteo (weather).
 - Deployment target: Alibaba Cloud ECS (hackathon requirement).
 

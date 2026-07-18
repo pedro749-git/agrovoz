@@ -25,8 +25,15 @@ becomes the thesis' design chapter.
   `list_product_names`), capped at 8k chars against the documented ~10k-token
   context limit · 2026-07-18
 - Discarded: tool calling / a second resolution round-trip with the LLM —
-  more latency and cost for the same goal, and the fuzzy resolver already
-  covers the miss case · 2026-07-18
+  more latency and cost for the same goal (and extra risk this close to the
+  deadline), and the fuzzy resolver already covers the miss case · 2026-07-18
+- Discarded: biasing with the FULL product registry once the vademécum
+  replaces the seed catalog — a huge undifferentiated list dilutes the bias
+  and doesn't scale; at that point the context narrows to the advisor's
+  working vocabulary (plots and equipment already are advisor-scoped) and the
+  fuzzy resolver keeps handling the long tail · 2026-07-18
+- Verified end-to-end on a real phone (fewer ⚠️ on the review screen for
+  dictated catalog names) · 2026-07-18
 - The generic POST /api/transcribe (assessment notes) stays unbiased: it
   dictates free-text reasons, not catalog names · 2026-07-18
 

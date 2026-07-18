@@ -23,7 +23,7 @@ field, with dirty hands and no time for forms.
 
 ```mermaid
 flowchart LR
-    A["🎙️ Voice note<br/>(PWA on the phone)"] --> B["Qwen3-ASR-Flash<br/>transcription"]
+    A["🎙️ Voice note<br/>(PWA on the phone)"] --> B["Qwen3-ASR-Flash<br/>transcription<br/>(biased by the advisor's catalog)"]
     B --> C["Qwen-Flash<br/>extraction → JSON"]
     C --> D["Pydantic gate<br/>(LLM output is untrusted)"]
     D --> E["Legal validation<br/>product · dose · area"]
@@ -38,6 +38,10 @@ What makes it more than a transcription toy:
   authorized, dose ≤ the registered maximum (**with unit conversion** — 0.5
   hl/ha does not slip past a 1.5 L/ha cap), treated area ≤ the SIGPAC
   enclosure's legal area, pre-harvest interval computed.
+- **Per-advisor speech recognition** — the advisor's registered catalog
+  (plots, products, equipment) is injected into the ASR as biasing context
+  before a word is heard, so proper nouns tend to arrive already canonical;
+  fuzzy resolution and legal validation remain downstream as defense in depth.
 - **Review before persist** — nothing from the LLM reaches the legal record
   unseen: the advisor reviews every field with per-field ✓/⚠️ resolution
   markers, then confirms.
