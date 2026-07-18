@@ -4,6 +4,55 @@ One entry per decision (taken AND discarded): what · why · discarded
 alternatives · date. Newest first — new entries go at the top. This file
 becomes the thesis' design chapter.
 
+## 2026-07-18 — Docs accuracy pass after a full review (docs must not overclaim)
+
+- A line-by-line review of README/ABOUT/ARCHITECTURE/SETUP/USER_GUIDE/DEMO
+  against the actual code found several claims the system does not (or does
+  not yet) honor; all corrected the same day · 2026-07-18
+- OSS stores ONLY the official PDFs — the dictated audio is transcribed
+  in-memory and never uploaded; every "OSS: audio + PDFs" mention removed
+  (README, ABOUT, ARCHITECTURE diagram, SETUP, CLAUDE.md). Storing the audio
+  as legal evidence stays a conscious open question, not a documented fact ·
+  2026-07-18
+- `earliest_harvest_date` and the ITEAF expiry check are pure functions in
+  `core/domain/calculations.py` used by `registration_pipeline` and
+  `execution_service` — ARCHITECTURE no longer lists the PHI date as a
+  `validation_service` rule · 2026-07-18
+- ARCHITECTURE's layout now lists the real secondary modules
+  (`calculations.py`, `timing.py`, `auth.py`, `presenters.py`, `_fuzzy.py`)
+  instead of silently omitting them · 2026-07-18
+- "Signed PDF" wording softened everywhere to "PDF with the advisor's
+  conformity declaration (name + ROPO)": the PDFs carry a printed
+  declaration, NOT a cryptographic signature (that stays on the roadmap,
+  already listed in ABOUT's "What's next") · 2026-07-18
+- ABOUT no longer claims observations auto-feed `previous_alternatives`
+  of the next prescription — the field is dictated; the auto-feed is an idea,
+  not a feature (stale comment in models.py fixed too) · 2026-07-18
+- 3-year retention documented as a legal MINIMUM, not an expiry; discarded:
+  implementing automatic deletion after 3 years — the law requires keeping
+  records at least that long, deleting is neither required nor wise for a
+  thesis dataset · 2026-07-18
+- WEATHER_PENDING documented honestly: today nothing backfills it; discarded
+  (for the freeze): a backfill job/endpoint — Open-Meteo serves historical
+  data, so it is cheap roadmap, but not two days before the deadline ·
+  2026-07-18
+- Demo seed bug fixed: the sandbox tractor had `iteaf_inspection_date=None`
+  "to avoid the warning", but `iteaf_inspection_expired()` deliberately
+  treats a missing date as expired (unrecorded = unprovable) — every demo
+  execution warned. The seed now sets the inspection one year back (inside
+  the 3-year validity); discarded: keeping the warning as a demo feature —
+  the stand demo is the happy path · 2026-07-18
+- USER_GUIDE's phrasebook rewritten to use ONLY the trial-sandbox names
+  (Finca de Pepe, El Bancal, tractor, Abamectina, real 2.0 L/ha max) so every
+  documented phrase is reproducible in a demo account; discarded: expanding
+  the seed with more plots/equipment/products during the freeze · 2026-07-18
+- USER_GUIDE §1 now describes `/api/bootstrap` as what it is — the TEMPORARY
+  hackathon trial signup (demo advisor + sandbox, 404 when the flag is off) —
+  not an email-linking step that never existed; the no-self-signup design
+  states its temporary exception in SETUP and USER_GUIDE §10 · 2026-07-18
+- README/ABOUT now say the project "will probably become" the author's TFG
+  (it is not formally registered yet) · 2026-07-18
+
 ## 2026-07-18 — Per-advisor ASR biasing with the catalog (Qwen3-ASR-Flash context)
 
 - FLUJO A preview now injects the advisor's own catalog names — plot voice

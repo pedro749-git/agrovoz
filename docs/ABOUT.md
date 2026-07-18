@@ -25,7 +25,7 @@ AgroVoz turns a dictated field note into a legally valid phytosanitary record:
 2. **Qwen3-ASR-Flash** transcribes it; **Qwen-Flash** extracts structured fields (plot, product, dose, target pest, equipment) as JSON.
 3. Dictated names are resolved against official catalogs — the advisor says *"la finca de Pepe"*, the system finds the registered holding, plot and SIGPAC enclosure.
 4. A **legal validation engine** checks the record before anything is saved: product authorized for that crop, dose ≤ the registered maximum (with unit conversion), treated area ≤ the enclosure's legal area, pre-harvest interval computed.
-5. The advisor reviews a screen with per-field ✓/⚠️ markers, confirms, and gets the official PDF — stored, signed-off and downloadable.
+5. The advisor reviews a screen with per-field ✓/⚠️ markers, confirms, and gets the official PDF — stored and downloadable.
 
 If there is no signal in the field, the take is queued locally (IndexedDB) and shows up as "pending to sync" — retrying it replays the same review flow with the original device timestamp, so nothing is lost and nothing duplicates.
 
@@ -37,7 +37,7 @@ Solo project, built in strict incremental milestones (M1–M8), each one working
 
 - **Backend:** Python 3.12 + FastAPI, hexagonal architecture (ports & adapters), Pydantic V2 everywhere.
 - **AI:** Qwen3-ASR-Flash (speech→text) + Qwen-Flash (text→JSON) via DashScope, with per-advisor ASR context biasing (the advisor's registered catalog is injected before transcription) and versioned few-shot prompts written in field Spanish.
-- **Data & infra:** Supabase (PostgreSQL + OTP auth), Alibaba Cloud OSS for audio and PDFs, ReportLab for the official documents, deployed on Alibaba Cloud ECS.
+- **Data & infra:** Supabase (PostgreSQL + OTP auth), Alibaba Cloud OSS for the official PDFs, ReportLab to generate them, deployed on Alibaba Cloud ECS.
 - **Frontend:** React + Vite + Tailwind PWA — installable, one big record button, offline queue for dead zones.
 
 ## Challenges we ran into
@@ -54,7 +54,7 @@ Solo project, built in strict incremental milestones (M1–M8), each one working
 - The full pipeline works on a real phone in the field: **voice in, legally validated PDF out, in under a minute** — even from a dead zone, via the offline queue.
 - The legal validation engine — this is not a transcription toy; it refuses to persist an illegal record, down to the unit conversion.
 - The complete record lifecycle (observation, prescription, execution, assessment, campaign validation) with legal traceability.
-- Built solo by a 3rd-year CS student — it is also my bachelor's thesis (TFG) — with every milestone verified end-to-end before moving on.
+- Built solo by a 3rd-year CS student — it will probably become my bachelor's thesis (TFG) — with every milestone verified end-to-end before moving on.
 
 ## What we learned
 
@@ -120,11 +120,11 @@ field**, where paper hurts most:
 | Phase | Where | The legal duty | AgroVoz |
 | --- | --- | --- | --- |
 | 0 · Contract + holding description | Office, once a year | Advisory contract + holding description (MAPA Annexes I–II); 1–2 h of start-of-campaign paperwork per client | ❌ Out of scope — the data already lives in the DB; generating these two PDFs with one button is post-MVP roadmap #1 |
-| 1 · Surveillance | Field, all year — **~80% of visits** | Advice "must be documented" (art. 11.2), yet most visits end in *"don't treat"* and today that is written nowhere | ✅ **Observation audio** (~30 s, no product) — documents the GIP surveillance and automatically becomes the *previous alternatives* of the next prescription |
-| 2 · Prescription | Field, when a threshold is exceeded | Advisor's prescription → record of interventions (Annex III) → handed to the farmer | ✅ **Prescription audio** → PDF signed with their ROPO in seconds, with unauthorized product / illegal dose / over-area **blocked before reaching paper** |
+| 1 · Surveillance | Field, all year — **~80% of visits** | Advice "must be documented" (art. 11.2), yet most visits end in *"don't treat"* and today that is written nowhere | ✅ **Observation audio** (~30 s, no product) — documents the GIP surveillance that justifies the next prescription |
+| 2 · Prescription | Field, when a threshold is exceeded | Advisor's prescription → record of interventions (Annex III) → handed to the farmer | ✅ **Prescription audio** → PDF carrying their name and ROPO in seconds, with unauthorized product / illegal dose / over-area **blocked before reaching paper** |
 | 3 · Execution | Done by the **farmer**, not the advisor | Annotation of the real application (the future CUE/SIEX entry, EU 2023/564) | ✅ **Execution confirmation**: real date/dose/operator → weather of the *real* application date → earliest harvest date (PHI) |
 | 4 · Follow-up | Field, days later | Result of the treatment | ✅ Effectiveness (Good/Fair/Poor) + delivery-note number on the detail screen |
-| 5 · Validation | Twice per crop cycle — **mandatory** | The advisor formally declares conformity over the record, mid-cycle and at closing | ✅ **One button**: signed PDF with the period's interventions + conformity declaration (name + ROPO) |
+| 5 · Validation | Twice per crop cycle — **mandatory** | The advisor formally declares conformity over the record, mid-cycle and at closing | ✅ **One button**: validation PDF with the period's interventions + conformity declaration (name + ROPO) |
 | 6 · Retention | 3 years (EU 2023/564) | Keep everything available for inspection | ✅ Soft-delete + PDFs in OSS + audit trail |
 
 **The problem in one sentence:** the advisor spends more time being a clerk
@@ -146,7 +146,7 @@ source:
 | Real application date (and time) | EU 2023/564 | Execution confirmation; always the **device** timestamp |
 | Product: trade name + MAPA registration number | Annex III / EU 2023/564 | Voice → catalog lookup |
 | Applied dose | EU 2023/564 | Voice / confirmation — validated ≤ legal max, unit-converted |
-| Target pest + GIP justification + previous alternatives | Annex III / MAPA doc | Voice; alternatives auto-fed from the plot's recent observations |
+| Target pest + GIP justification + previous alternatives | Annex III / MAPA doc | Voice (dictated in the same note) |
 | Operator identity + ROPO card | Annex III | Voice, or the holding's default operator |
 | Equipment + ROMA number + ITEAF inspection | Annex III / RD 1702/2011 | Voice → catalog lookup; expiry warning computed |
 | PHI → earliest harvest date | Product label (EU 1107/2009) | Computed: real date + the product's PHI |
@@ -162,8 +162,8 @@ Where every datum comes from, in one glance:
   dose + unit, pest, equipment, and optionally area, justification, operator,
   planned date.
 - 📱 **Device** — idempotency `transaction_id`, the dictation timestamp, GPS.
-- ⚙️ **System** — catalog lookups, previous alternatives, earliest harvest
-  date, ITEAF warning, prompt version.
+- ⚙️ **System** — catalog lookups, earliest harvest date, ITEAF warning,
+  prompt version.
 - 🌦️ **Weather provider** — at execution confirmation, for the real date.
 - 🖥️ **Admin** — the trusted registers: holdings, plots (SIGPAC), equipment
   (ROMA, ITEAF), product catalog. The advisor never types identifiers.

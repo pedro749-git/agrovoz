@@ -13,13 +13,17 @@ port 5173). Phone testing adds a third: an HTTPS tunnel.
   - **Supabase** project (PostgreSQL + Auth) + the **Supabase CLI** to apply
     the schema (`supabase/migrations/`).
   - **DashScope** API key (Qwen3-ASR-Flash + Qwen-Flash)
-  - **Alibaba Cloud OSS** bucket + access keys (audio and PDF storage)
+  - **Alibaba Cloud OSS** bucket + access keys (PDF storage)
 
-> **Note on accounts:** there is no self-signup. The admin provisions each
-> advisor (profile, holdings, plots with SIGPAC + voice alias, equipment,
-> product catalog) directly in Supabase, and creates their auth user; the
-> advisor then just logs in with an email OTP code. The onboarding steps and
-> every user flow are described in [`USER_GUIDE.md`](USER_GUIDE.md).
+> **Note on accounts:** in the permanent design there is no self-signup. The
+> admin provisions each advisor (profile, holdings, plots with SIGPAC + voice
+> alias, equipment, product catalog) directly in Supabase, and creates their
+> auth user; the advisor then just logs in with an email OTP code. During the
+> hackathon there is a **temporary trial-signup path** ("Crear cuenta de
+> prueba" on the login screen → `POST /api/bootstrap`, behind the
+> `hackathon_signup_enabled` flag) that provisions a throwaway demo advisor
+> with a sandbox catalog. The onboarding steps and every user flow are
+> described in [`USER_GUIDE.md`](USER_GUIDE.md).
 
 ## 1. Backend
 

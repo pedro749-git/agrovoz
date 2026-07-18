@@ -36,7 +36,7 @@ Agent**.
   [`app/adapters/outbound/qwen.py`](app/adapters/outbound/qwen.py)
   (DashScope: ASR + extraction) ·
   [`app/adapters/outbound/oss_storage.py`](app/adapters/outbound/oss_storage.py)
-  (OSS: audio + PDFs) · deployed on an Alibaba Cloud ECS instance
+  (OSS: official PDFs) · deployed on an Alibaba Cloud ECS instance
   ([`docs/SETUP.md`](docs/SETUP.md)).
 - **How AgroVoz uses Qwen Cloud:** Qwen3-ASR-Flash with **per-advisor context
   biasing** (the advisor's registered catalog injected before transcription) +
@@ -90,7 +90,7 @@ What makes it more than a transcription toy:
 - **AI**: Qwen3-ASR-Flash (speech→text) + Qwen-Flash (text→JSON) via DashScope,
   with versioned few-shot prompts in field Spanish.
 - **Data & infra**: Supabase (PostgreSQL + email-OTP auth) · Alibaba Cloud OSS
-  (audio + PDFs) · ReportLab · Open-Meteo (weather) · Alibaba Cloud ECS (deploy).
+  (official PDFs) · ReportLab · Open-Meteo (weather) · Alibaba Cloud ECS (deploy).
 - **Frontend**: React 19 + Vite + Tailwind installable PWA.
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full diagram and
@@ -117,9 +117,9 @@ Full step-by-step (keys, accounts, tunnel, tests, shutdown):
 
 ## Project status
 
-Solo project — a 3rd-year CS student's bachelor's thesis (TFG) — built in
-strict incremental milestones, each one verified end-to-end **on a real
-phone** before starting the next.
+Solo project by a 3rd-year CS student — likely to become a bachelor's thesis
+(TFG) — built in strict incremental milestones, each one verified end-to-end
+**on a real phone** before starting the next.
 
 | Milestone | Delivered |
 | --- | --- |
@@ -129,7 +129,7 @@ phone** before starting the next.
 | M4 | Installable PWA: OTP login, record button, today's list, PDF download |
 | M5 | State machine + execution confirmation (re-validated) + weather at application time + ITEAF warning |
 | M6 | Effectiveness assessment (EXECUTED → ASSESSED) + delivery-note number |
-| M7 | Twice-per-campaign advisor validations with a signed PDF |
+| M7 | Twice-per-campaign advisor validations with a conformity-declaration PDF |
 | M8 | Review-before-persist (preview/commit) + corrections by supersede + two-phase record flow |
 | Hardening | Offline pending queue · unit-aware dose validation · history with date filter · UI polish |
 

@@ -31,7 +31,7 @@ flowchart TB
     subgraph External["External services"]
         DS["DashScope<br/>Qwen3-ASR-Flash + Qwen-Flash"]
         SB[("Supabase<br/>PostgreSQL + Auth (OTP)")]
-        OSSX["Alibaba Cloud OSS<br/>audio + PDFs"]
+        OSSX["Alibaba Cloud OSS<br/>official PDFs"]
         OM["Open-Meteo<br/>weather at application time"]
     end
 
@@ -81,10 +81,14 @@ never saved:
   (0.5 hl/ha vs a 1.5 L/ha cap); unknown or incomparable units are blocked,
   never guessed.
 - Treated area ≤ the SIGPAC enclosure's legal area.
-- Pre-harvest interval → `earliest_harvest_date`.
 
 Errors surface as `{"error": "DOSE_ERROR", "mensaje": "…"}` — the message is
 in Spanish, readable by an agronomist.
+
+Derived legal values are *not* validation rules: `earliest_harvest_date`
+(treatment date + the product's PHI) and the ITEAF-expiry warning are pure
+functions in `app/core/domain/calculations.py`, called by
+`registration_pipeline` and `execution_service`.
 
 ## The record lifecycle (state machine, M5+)
 
@@ -133,8 +137,8 @@ are never deleted (3-year retention).
 | `POST /api/transcribe` | Transcription only (dictation helper) |
 | `GET /api/holdings` | Holdings overview for campaign validations |
 | `POST /api/holdings/{id}/validations` | Sign a campaign validation (M7) |
-| `GET /api/validations/{id}/pdf` | Signed validation PDF |
-| `POST /api/bootstrap` | Link the auth user to the advisor profile |
+| `GET /api/validations/{id}/pdf` | Validation PDF (conformity declaration) |
+| `POST /api/bootstrap` | Hackathon-only trial signup: provision a demo advisor + sandbox catalog (404 when `hackathon_signup_enabled` is off) |
 
 ## Repository layout
 
@@ -142,16 +146,19 @@ are never deleted (3-year retention).
 app/
   core/
     domain/      models.py · schemas.py (Pydantic V2) · states.py · errors.py
+                 calculations.py (pure derived values: PHI date, ITEAF expiry)
     ports/       transcriber.py · extractor.py · repository.py
                  storage.py · weather.py · pdf_generator.py  (ABCs)
     services/    registration_pipeline.py · execution_service.py
                  assessment_service.py · campaign_validation_service.py
                  correction_service.py · onboarding_service.py
-                 validation_service.py
+                 validation_service.py · timing.py (latency logging helper)
   adapters/
-    inbound/     api.py (FastAPI)
+    inbound/     api.py (FastAPI) · auth.py (JWT via JWKS) ·
+                 presenters.py (domain → JSON)
     outbound/    qwen.py · supabase_repo.py · oss_storage.py
-                 reportlab_pdf.py · open_meteo_weather.py
+                 reportlab_pdf.py · open_meteo_weather.py ·
+                 _fuzzy.py (voice-alias matching)
   config/        settings.py (pydantic-settings) · container.py · .env
 pwa/             React + Vite + Tailwind + vite-plugin-pwa client
 prompts/         extraction prompts (few-shot, in Spanish, versioned)

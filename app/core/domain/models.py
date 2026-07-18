@@ -165,7 +165,7 @@ class Intervention:
     prescribed_dose: float | None = None
     target_pest: str | None = None
     justification: str | None = None
-    previous_alternatives: str | None = None  # autocompleted from plot
+    previous_alternatives: str | None = None  # dictated in the same note
     #                                           OBSERVATIONs (≤60 days)
     prescription_pdf_key: str | None = None
 

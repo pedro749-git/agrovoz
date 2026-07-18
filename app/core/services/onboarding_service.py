@@ -18,6 +18,8 @@ the equipment ("tractor") with no setup. The product (Abamectina) lives in the
 shared MAPA catalog and is NOT seeded here — the catalog must already carry it.
 """
 
+from datetime import date, timedelta
+
 from app.core.domain.models import Advisor, Equipment, Holding, Plot
 from app.core.ports.repository import Repository
 
@@ -108,15 +110,18 @@ class OnboardingService:
             )
         )
 
-        # Equipment alias matches the demo audio ("tractor"). ITEAF date left
-        # unset (None) so the execution flow does not spuriously warn; the stand
-        # demo is about the happy path.
+        # Equipment alias matches the demo audio ("tractor"). The ITEAF
+        # inspection date must be a recent real date: calculations.py treats a
+        # missing date as "cannot prove the machine is in-date" and warns, so
+        # None would make every demo execution show the ITEAF warning. One year
+        # ago is comfortably inside the 3-year validity window (happy path).
         await self._repo.save_equipment(
             Equipment(
                 holding_id=holding.id,
                 equipment_alias="tractor",
                 equipment_type="TRACTOR",
                 roma_number=f"DEMO-ROMA-{suffix}",
+                iteaf_inspection_date=date.today() - timedelta(days=365),
             )
         )
 

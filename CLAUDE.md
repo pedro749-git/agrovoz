@@ -125,7 +125,8 @@ docs/            ABOUT.md · ARCHITECTURE.md · SETUP.md · DEMO.md ·
   from M4 — not the legacy shared HS256 secret).
 - Qwen3-ASR-Flash (speech→text, with per-advisor catalog biasing) +
   Qwen-Flash (text→JSON) via DashScope.
-- Alibaba Cloud OSS (audio + PDFs), ReportLab (PDFs), Open-Meteo (weather).
+- Alibaba Cloud OSS (official PDFs; audio is NOT stored), ReportLab (PDFs),
+  Open-Meteo (weather).
 - Deployment target: Alibaba Cloud ECS (hackathon requirement).
 
 ```bash

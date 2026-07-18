@@ -11,26 +11,31 @@ Replaces the old `funcionabilidad.md` (Spanish, pre-M8).
 
 ## 1. Roles & onboarding
 
-There is **no self-signup**. The admin validates and provisions each advisor;
-the advisor only ever logs in.
+In the permanent design there is **no self-signup**. The admin validates and
+provisions each advisor; the advisor only ever logs in.
 
 1. **Admin validates the advisor (outside the system).** The advisor provides
    DNI, ROPO number and email; the admin checks the public ROPO registry
    (MAPA) — the advisor must be ACTIVE and hold the *Asesor* category
    (*Básico* is not enough).
-2. **Admin creates the profile** in Supabase (`advisors`, `account_status =
-   'ACTIVE'`, no `auth_user_id` yet).
+2. **Admin creates the account** in Supabase: the auth user and the `advisors`
+   profile (`account_status = 'ACTIVE'`), linked via `auth_user_id`.
 3. **Admin provisions the catalog** the voice pipeline resolves against:
    - `holdings` — owner, NIF, REA/REGEPA number, default operator;
    - `plots` — SIGPAC identification + `voice_alias` (what the advisor calls
      it out loud) + centroid lat/lon;
    - `equipment` — ROMA number + `equipment_alias`.
    The advisor never types any of this.
-4. **Advisor logs in** (next section). Login uses `shouldCreateUser: false`,
-   so only pre-registered emails get in.
-5. **Automatic linking** (`POST /api/bootstrap`): the backend finds the
-   profile by email and links `auth_user_id` to it. No profile → HTTP 403
-   *"No tienes perfil. Contacta con el administrador."*
+4. **Advisor logs in** (next section).
+
+> **Temporary hackathon exception — the trial account.** While the event
+> lasts, the login screen offers *"Crear cuenta de prueba"*: a new user signs
+> up and `POST /api/bootstrap` (behind the `hackathon_signup_enabled` flag)
+> provisions a **throwaway demo advisor** with a personal sandbox catalog —
+> the "Pepe García (demo)" holding, the plots *Finca de Pepe* (Cítricos) and
+> *El Bancal* (Olivar), and the *tractor* equipment — so a judge can try the
+> whole flow with the canonical demo phrase. With the flag off the endpoint
+> returns 404 and the closed-login design applies unchanged.
 
 ## 2. Login
 
@@ -72,6 +77,11 @@ real time.
 
 ### 3.2 Phrasebook — what to say
 
+Every phrase below uses the trial-account sandbox (§1) — plots *Finca de
+Pepe* (Cítricos) and *El Bancal* (Olivar), equipment *tractor*, product
+Abamectina — so each example is reproducible as-is in a demo account. The
+error examples in §3.3 that deliberately use an unregistered name say so.
+
 **Prescription (minimal — the four mandatory pieces: plot, product + dose,
 pest, equipment):**
 
@@ -83,31 +93,31 @@ pest, equipment):**
 **Prescription (full — adds GIP justification, previous alternatives and a
 planned date):**
 
-> *"Parcela del río, umbral superado, prescribo Aceite de parafina medio
-> hectolitro por hectárea para cochinilla, con el atomizador; ya pusimos
-> trampas sin éxito, previsto para el quince de julio"*
-> — River plot, threshold exceeded, I prescribe paraffin oil at 0.5 hl/ha
-> for scale insects, with the mist blower; we already tried traps without
-> success, planned for July 15th.
+> *"Finca de Pepe, umbral superado, prescribo Abamectina a uno coma cinco
+> litros por hectárea contra la araña roja con el tractor; ya pusimos
+> trampas sin éxito, previsto para el quince de agosto"*
+> — Pepe's farm, threshold exceeded, I prescribe abamectin at 1.5 L/ha
+> against red spider mite, with the tractor; we already tried traps without
+> success, planned for August 15th.
 > → `justification` "umbral superado", `previous_alternatives` "trampas sin
 > éxito", `planned_date` filled.
 
 **Observation (surveillance — no product, no dose):**
 
-> *"En la parcela norte he contado tres capturas en la trampa, está por
-> debajo del umbral, de momento no hace falta tratar"*
-> — North plot, three catches in the trap, below threshold, no treatment
-> needed for now.
+> *"En El Bancal he contado tres capturas en la trampa, está por debajo del
+> umbral, de momento no hace falta tratar"*
+> — El Bancal (the demo's olive plot), three catches in the trap, below
+> threshold, no treatment needed for now.
 > → stored as `OBSERVATION` with the note as `observation`; documents the
 > GIP surveillance that later justifies a prescription.
 
 **Direct execution (the treatment already happened — past tense):**
 
-> *"En la finca grande hemos echado esta mañana Abamectina a uno con dos
+> *"En la Finca de Pepe hemos echado esta mañana Abamectina a uno con dos
 > litros por hectárea contra araña roja, dos hectáreas tratadas con el
-> atomizador, lo aplicó Juan"*
-> — Big farm, this morning we applied abamectin at 1.2 L/ha against red
-> spider mite, two hectares treated with the mist blower, Juan applied it.
+> tractor, lo aplicó Juan"*
+> — Pepe's farm, this morning we applied abamectin at 1.2 L/ha against red
+> spider mite, two hectares treated with the tractor, Juan applied it.
 > → stored directly as `EXECUTED` with `treated_area_ha` 2 and
 > `operator_name` "Juan"; weather is captured for the real application date.
 
@@ -131,11 +141,11 @@ form; it **never converts the number** (conversion is the validator's job):
 | --- | --- | --- |
 | ✅ Saved | any valid phrase above | Record in today's list; prescription → PDF link |
 | 👁 Observation saved | the observation phrase | Surveillance record, no PDF |
-| ⛔ `DOSE_ERROR` — over the legal max | *"Abamectina **cinco** litros por hectárea"* (max is 1.5 L/ha) | Blocked-by-legal-validation card: dose exceeds the registered maximum |
+| ⛔ `DOSE_ERROR` — over the legal max | *"Abamectina **cinco** litros por hectárea"* (registered max is 2.0 L/ha) | Blocked-by-legal-validation card: dose exceeds the registered maximum |
 | ⛔ `DOSE_ERROR` — over the max **after unit conversion** | *"Abamectina **medio hectolitro** por hectárea"* (0.5 hl/ha = 50 L/ha) | Blocked — the validator converts to the catalog's unit before comparing |
 | ⛔ `DOSE_ERROR` — unit not comparable / not recognized | *"tres litros **por árbol**"* | Blocked with *"indica la dosis en L/ha…"* — incomparable units are refused, never guessed |
-| ⛔ `PRODUCT_ERROR` | *"…hemos echado **Clorpirifos** dos kilos por hectárea…"* — chlorpyrifos lost its EU approval in 2020; the catalog registers it as unauthorized | Blocked: product not authorized. The flagship demo of the legal engine |
-| ⛔ `AREA_ERROR` | *"…**cinco hectáreas** tratadas…"* on a 2-ha SIGPAC enclosure | Blocked: treated area exceeds the enclosure's legal area |
+| ⛔ `PRODUCT_ERROR` | *"…hemos echado **Clorpirifos** dos kilos por hectárea…"* — chlorpyrifos lost its EU approval in 2020 | Blocked: product not authorized — **if** the shared catalog registers it as unauthorized; if it is simply not loaded, the product fails to resolve instead (⚠️) |
+| ⛔ `AREA_ERROR` | *"…**diez hectáreas** tratadas…"* — Finca de Pepe's SIGPAC enclosure is 2.5 ha | Blocked: treated area exceeds the enclosure's legal area |
 | ⛔ `FIELD_ERROR` (HTTP 422) | *"Finca de Pepe, aplicar Abamectina contra araña roja con el tractor"* — **no dose** | Missing mandatory field, clear Spanish message; the system never invents a value |
 | ⚠️ → ⛔ `PLOT_NOT_FOUND` | *"Finca de **Manolo**…"* (not registered) | ⚠️ on the review screen; confirming without fixing it is rejected |
 | ⚠️ → ⛔ `EQUIPMENT_NOT_FOUND` | *"…con la **mochila nueva**"* (alias not registered) | Same: fix it on the review form (or have the admin register the alias) |
@@ -167,7 +177,9 @@ On confirm, the system:
 2. Moves `PRESCRIBED → EXECUTED`.
 3. Captures the **weather of the real application date** (Open-Meteo;
    historical data if confirmed days later). Provider down →
-   `WEATHER_PENDING`, never a block.
+   `WEATHER_PENDING`, never a block. The gap stays recorded as
+   `WEATHER_PENDING` — there is no automatic backfill yet (Open-Meteo serves
+   historical data, so a later backfill is straightforward roadmap).
 4. Computes `earliest_harvest_date` = real date + the product's pre-harvest
    interval (PHI).
 5. Warns if the equipment's **ITEAF inspection has expired**.
@@ -199,8 +211,9 @@ From the detail screen:
   `created_at`, preserving the audit chain. Only available before execution —
   correcting an executed treatment would rewrite history.
 - **Eliminar** — soft-delete only (`deleted_at`); the row stays in the
-  database for the 3-year retention period. Nothing is ever physically
-  deleted from the PWA.
+  database for at least the legal 3-year retention period (the regulation
+  sets a minimum, not an expiry). Nothing is ever physically deleted from
+  the PWA.
 
 Attempting a backward state transition (e.g. re-confirming an executed
 record) is rejected with `STATE_TRANSITION_ERROR`.
@@ -237,8 +250,10 @@ For each validation the advisor declares:
   > treatment's delivery note is missing and the dose applied on the north
   > plot does not match the prescribed one.
 
-Outcomes: a signed **validation PDF** (advisor name + ROPO, period covered,
-intervention count, conformity + remarks, the period's intervention list);
+Outcomes: a **validation PDF** carrying the advisor's conformity declaration
+(name + ROPO, period covered, intervention count, conformity + remarks, the
+period's intervention list — a printed declaration; cryptographic digital
+signature is on the roadmap);
 `REMARKS_REQUIRED` if *No conforme* without an explanation;
 `VALIDATION_EXISTS` if that campaign+type was already validated;
 `INVALID_CAMPAIGN` for a malformed campaign.
@@ -261,7 +276,8 @@ equipment (type + ROMA number), weather conditions, delivery-note number.
 
 **C — Campaign validation PDF** (MAPA instructions; min. 2 per cycle).
 Generated when the advisor signs a validation; kept for inspection. Contains:
-advisor signature (name + ROPO), holding (owner + REA/REGEPA), campaign +
+the advisor's conformity declaration (name + ROPO — printed, not a
+cryptographic signature), holding (owner + REA/REGEPA), campaign +
 type (mid-cycle/final), period covered, conformity + remarks, intervention
 count and the period's intervention list.
 
@@ -276,4 +292,5 @@ count and the period's intervention list.
 - ❌ **Export to the Government (SIEX/CUE)** — post-MVP, and an
   administrator's function, not the advisor's.
 - ❌ **Self-signup** — a valid email is not enough; the ROPO check comes
-  first.
+  first. (Temporary exception: the hackathon **trial demo account** — see
+  §1 — which provisions throwaway demo data, never a real advisor profile.)
