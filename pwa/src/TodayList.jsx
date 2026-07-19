@@ -86,7 +86,7 @@ function TodayList({ refreshKey }) {
         {/* Verbatim the first few-shot example in prompts/extraction_v1.md, so
             this exact dictation is the best-rehearsed path in the pipeline. */}
         <p className="mt-3 max-w-[16rem] rounded-xl border border-dashed border-olive/40 bg-olive/5 px-4 py-3 text-sm font-medium italic leading-relaxed text-olive-d">
-          «Finca de Pepe, hay que aplicar Abamectina a uno con cinco litros por
+          «Finca de Pepe, hay que aplicar Abamectina a uno coma cinco litros por
           hectárea contra araña roja con el tractor»
         </p>
       </div>

@@ -85,7 +85,7 @@ error examples in §3.3 that deliberately use an unregistered name say so.
 **Prescription (minimal — the four mandatory pieces: plot, product + dose,
 pest, equipment):**
 
-> *"Finca de Pepe, hay que aplicar Abamectina a uno con cinco litros por
+> *"Finca de Pepe, hay que aplicar Abamectina a uno coma cinco litros por
 > hectárea contra araña roja con el tractor"*
 > — Pepe's farm, apply abamectin at 1.5 L/ha against red spider mite, with
 > the tractor sprayer.
@@ -126,7 +126,7 @@ form; it **never converts the number** (conversion is the validator's job):
 
 | Dictated | Extracted |
 | --- | --- |
-| *"uno con cinco litros por hectárea"* | `dose: 1.5, dose_unit: "L/ha"` |
+| *"uno coma cinco litros por hectárea"* | `dose: 1.5, dose_unit: "L/ha"` |
 | *"dos kilos por hectárea"* | `dose: 2, dose_unit: "Kg/ha"` |
 | *"doscientos mililitros por hectárea"* | `dose: 200, dose_unit: "ml/ha"` |
 | *"medio hectolitro por hectárea"* | `dose: 0.5, dose_unit: "hl/ha"` — **not** 50 L/ha |
