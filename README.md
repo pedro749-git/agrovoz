@@ -30,7 +30,7 @@ Agent**.
 | Human-in-the-loop checkpoints | Review-before-persist with per-field ✓/⚠️ markers — nothing from the LLM reaches the legal record unseen; execution confirmation and twice-per-campaign validations are explicit advisor sign-offs |
 | Production-readiness | Legal validation engine (blocks illegal records), idempotent offline queue, soft-delete audit trail with 3-year retention, deployed on Alibaba Cloud ECS |
 
-- **🎬 Demo video:** `TODO`
+- **🎬 Demo video:** https://youtu.be/U4lEeHZ8WIc?si=_N8534jk7-w6AvF-
   <!-- 📸 TODO: add the YouTube link before submitting. -->
 - **Alibaba Cloud usage in code:**
   [`app/adapters/outbound/qwen.py`](app/adapters/outbound/qwen.py)
